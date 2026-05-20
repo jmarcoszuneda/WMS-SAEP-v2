@@ -29,6 +29,10 @@ Use the default triage vocabulary: `needs-triage`, `needs-info`, `ready-for-agen
 
 Single-context repo; use root `CONTEXT.md` and `docs/adr/` when present, plus the existing repo docs under `docs/` as current domain references. See `docs/agents/domain.md`.
 
+### Code conventions
+
+Per-app layered architecture and implementation rules: see `docs/CONVENTIONS.md` (decision: `docs/adr/0004-arquitetura-em-camadas.md`).
+
 ## Project commands
 
 - Run tests: `uv run pytest -q -ra --tb=short --strict-markers --disable-warnings`
@@ -50,7 +54,9 @@ The local environment is disposable in dev.
 
 ## Language convention
 
-- Source code must use English for models, fields, views, URLs, variables, functions, classes, and internal identifiers.
+- Domain identifiers use PT-BR: models, fields, choices, services, policies, selectors, and domain functions/variables. This keeps code aligned with the ubiquitous language and the `CONTEXT.md` glossary.
+- The technical/framework surface stays in English where the framework imposes it: app package names (e.g. `accounts`), inherited Django attributes (`is_active`, `is_staff`, `is_superuser`, `USERNAME_FIELD`), and standard hooks.
+- URLs use PT-BR slugs (e.g. `/requisicoes/`, `/requisicoes/nova/`).
 - Documentation and code comments must use PT-BR.
 - Django models must always define `verbose_name` and `verbose_name_plural` in PT-BR.
 

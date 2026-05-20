@@ -95,3 +95,45 @@ class User(AbstractUser):
 
     def get_short_name(self):
         return self.nome
+
+
+class VinculoAuxiliar(models.Model):
+    """Atribuição operacional de auxiliar entre um usuário e um setor.
+
+    Independente da lotação principal (``User.setor``). O papel "auxiliar de
+    almoxarifado" deriva de um vínculo ativo cujo setor está ativo e tem
+    ``classificacao == ALMOXARIFADO`` — não há model separado.
+    """
+
+    usuario = models.ForeignKey(
+        settings.AUTH_USER_MODEL,
+        on_delete=models.PROTECT,
+        related_name='vinculos_auxiliares',
+        verbose_name='usuário',
+    )
+    setor = models.ForeignKey(
+        Setor,
+        on_delete=models.PROTECT,
+        related_name='vinculos_auxiliares',
+        verbose_name='setor',
+    )
+    ativo = models.BooleanField('ativo', default=True)
+    criado_em = models.DateTimeField('criado em', auto_now_add=True)
+    atualizado_em = models.DateTimeField('atualizado em', auto_now=True)
+    desativado_em = models.DateTimeField('desativado em', null=True, blank=True)
+
+    class Meta:
+        verbose_name = 'vínculo de auxiliar'
+        verbose_name_plural = 'vínculos de auxiliar'
+        ordering = ('-criado_em',)
+        constraints = [
+            models.UniqueConstraint(
+                fields=['usuario', 'setor'],
+                condition=models.Q(ativo=True),
+                name='unico_vinculo_auxiliar_ativo',
+            ),
+        ]
+
+    def __str__(self):
+        estado = 'ativo' if self.ativo else 'inativo'
+        return f'{self.usuario} ⇄ {self.setor} ({estado})'

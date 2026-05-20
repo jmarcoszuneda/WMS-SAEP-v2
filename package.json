@@ -1,0 +1,15 @@
+{
+  "name": "wms-saep-v2",
+  "version": "0.1.0",
+  "private": true,
+  "scripts": {
+    "css:build": "tailwindcss -i apps/core/static/core/css/input.css -o apps/core/static/core/css/app.css --minify",
+    "css:dev": "tailwindcss -i apps/core/static/core/css/input.css -o apps/core/static/core/css/app.css --watch"
+  },
+  "devDependencies": {
+    "@tailwindcss/cli": "^4",
+    "tailwindcss": "^4",
+    "htmx.org": "^2",
+    "alpinejs": "^3"
+  }
+}
