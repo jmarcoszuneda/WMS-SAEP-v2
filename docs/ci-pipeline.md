@@ -16,6 +16,7 @@ uv run ruff check .
 uv run mypy apps
 
 # Backend (exige PostgreSQL rodando)
+uv run python manage.py makemigrations
 uv run python manage.py makemigrations --check --dry-run
 uv run python manage.py migrate --run-syncdb
 SEED_DEV_HABILITADO=true uv run python manage.py seed_dev
@@ -70,12 +71,12 @@ Se uma importação causar erro, adicione `# type: ignore` como último recurso 
 
 ### makemigrations --check falha
 
-Você editou um model e não gerou migração.
+O CI materializa migrations locais primeiro porque o ambiente é efêmero e
+migrations locais não são entrega normal. Depois roda `makemigrations --check`
+para confirmar que a geração é estável.
 
 ```bash
 uv run python manage.py makemigrations
-# Verifica se gerou arquivo
-git add apps/<app>/migrations/
 ```
 
 Depois:

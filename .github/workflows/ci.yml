@@ -80,6 +80,7 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen
+      - run: uv run python manage.py makemigrations
       - run: uv run python manage.py makemigrations --check --dry-run
       - run: uv run python manage.py migrate --run-syncdb
       - run: SEED_DEV_HABILITADO=true uv run python manage.py seed_dev
@@ -111,4 +112,5 @@ jobs:
           enable-cache: true
           cache-dependency-glob: uv.lock
       - run: uv sync --frozen
+      - run: uv run python manage.py makemigrations
       - run: uv run pytest -q -ra --tb=short --strict-markers --disable-warnings

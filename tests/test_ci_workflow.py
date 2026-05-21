@@ -19,6 +19,7 @@ def test_ci_workflow_declara_gates_do_issue_16():
     assert 'mypy apps' in conteudo
     assert 'postgres:16' in conteudo
     assert 'pg_isready' in conteudo
+    assert 'python manage.py makemigrations\n' in conteudo
     assert 'makemigrations --check --dry-run' in conteudo
     assert 'migrate --run-syncdb' in conteudo
     assert conteudo.count('seed_dev') >= 2
