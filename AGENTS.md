@@ -27,23 +27,31 @@ Use the default triage vocabulary: `needs-triage`, `needs-info`, `ready-for-agen
 
 ### Domain docs
 
-Single-context repo; use root `CONTEXT.md` and `docs/adr/` when present, plus the existing repo docs under `docs/` as current domain references. See `docs/agents/domain.md`.
+Single-context repo. Use `docs/agents/domain.md` as the routing guide for domain documentation.
+
+If docs and memory disagree, trust live docs/code first and update Serena memory when the decision is durable.
 
 ### Code conventions
 
-Per-app layered architecture and implementation rules: see `docs/CONVENTIONS.md` (decision: `docs/adr/0004-arquitetura-em-camadas.md`).
+Do not duplicate project rules here. Use these sources:
+
+- Layered architecture and implementation rules: `docs/CONVENTIONS.md` and ADR-0004.
+- Service/policy/domain-exception contract: ADR-0011.
+- Test strategy: ADR-0010.
+- Server-rendered frontend and design system: `docs/design-system.md` and ADR-0008.
+- Seed/dev data contract: ADR-0009.
 
 ## Project commands
 
 - Run tests: `uv run pytest -q -ra --tb=short --strict-markers --disable-warnings`
-> **Nunca utilize redirecionamentos, pipes, `tail`, `head`, `grep` ou truncamento de saída.** Quando houver falha, use o caminho `[full output: ...]` emitido pelo Tee System do RTK para inspecionar a saída bruta completa sem reexecutar o comando.
+> **Never use redirections, pipes, `tail`, `head`, `grep`, or output truncation.** When a command fails, use the `[full output: ...]` path emitted by the RTK Tee System to inspect the complete raw output without rerunning the command.
 
 ## Ephemeral development environment
 
 The local environment is disposable in dev.
 
 - the local database may be deleted and recreated;
-- the default flow is reset database -> apply migrations -> load minimal data, when available;
+- the default flow is reset database -> apply migrations -> load minimal data, when the corresponding command exists;
 - local migrations are unversioned and ignored by `.gitignore`;
 - `make init` must be used during the initial project setup to create .venv and install dependencies;
 - at this stage of the project, every edit to `models` or schema must be followed by `make setup`, so the workflow does not depend on manual migration management;
@@ -51,6 +59,7 @@ The local environment is disposable in dev.
 - creating new migration files is not part of the normal delivery in this ephemeral context;
 - the source of truth for structural changes is `models`, constraints, indexes, domain rules, and tests; local migrations only materialize the local database;
 - tasks without structural changes may follow an incremental flow; a full reset is mandatory only for schema/model changes or when the local environment is inconsistent;
+- ADR-0009 defines `seed_dev`/`make seed-dev` as the intended local seed contract, but do not assume it is runnable until the Makefile and command exist in the live tree;
 
 ## Language convention
 
