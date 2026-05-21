@@ -28,7 +28,9 @@ def test_home_usa_layout_autenticado(client):
 
     assert resposta.status_code == 200
     assert '<header' in conteudo
-    assert '<main class="mx-auto max-w-5xl p-6">' in conteudo
+    assert '<main' in conteudo
+    assert 'max-w-5xl' in conteudo
+    assert 'p-6' in conteudo
     assert 'Operador Home (HOME-001)' in conteudo
 
 

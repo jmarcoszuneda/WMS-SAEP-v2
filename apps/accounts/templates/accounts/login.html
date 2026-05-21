@@ -32,7 +32,7 @@
             </label>
             {{ form.username }}
             {% if form.username.errors %}
-              <div class="mt-2 text-sm text-red-700" role="alert">
+              <div id="username-error" class="mt-2 text-sm text-red-700" role="alert">
                 {% for error in form.username.errors %}
                   <p>{{ error }}</p>
                 {% endfor %}
@@ -46,7 +46,7 @@
             </label>
             {{ form.password }}
             {% if form.password.errors %}
-              <div class="mt-2 text-sm text-red-700" role="alert">
+              <div id="password-error" class="mt-2 text-sm text-red-700" role="alert">
                 {% for error in form.password.errors %}
                   <p>{{ error }}</p>
                 {% endfor %}

@@ -32,7 +32,22 @@ class MatriculaAuthenticationForm(AuthenticationForm):
             ),
         })
         if self.is_bound:
-            self.fields['username'].widget.attrs['aria-invalid'] = 'true'
-            self.fields['username'].widget.attrs['aria-describedby'] = 'login-error'
-            self.fields['password'].widget.attrs['aria-invalid'] = 'true'
-            self.fields['password'].widget.attrs['aria-describedby'] = 'login-error'
+            if self['username'].errors:
+                self.fields['username'].widget.attrs['aria-invalid'] = 'true'
+                self.fields['username'].widget.attrs['aria-describedby'] = (
+                    'username-error'
+                )
+            if self['password'].errors:
+                self.fields['password'].widget.attrs['aria-invalid'] = 'true'
+                self.fields['password'].widget.attrs['aria-describedby'] = (
+                    'password-error'
+                )
+            if self.non_field_errors():
+                self.fields['username'].widget.attrs['aria-invalid'] = 'true'
+                self.fields['username'].widget.attrs['aria-describedby'] = (
+                    'login-error'
+                )
+                self.fields['password'].widget.attrs['aria-invalid'] = 'true'
+                self.fields['password'].widget.attrs['aria-describedby'] = (
+                    'login-error'
+                )
