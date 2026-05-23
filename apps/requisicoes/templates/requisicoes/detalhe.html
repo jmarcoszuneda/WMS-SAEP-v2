@@ -68,9 +68,16 @@
     </dl>
   </section>
 
-  {# --- 2. Itens --- #}
-  <section class="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-    <h2 class="text-lg font-medium text-slate-900 mb-4">Itens</h2>
+  {# --- 2. Itens (seção operacional principal) --- #}
+  <section class="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-md ring-1 ring-slate-100 sm:p-6">
+    <div class="mb-4 flex items-baseline justify-between gap-3">
+      <h2 class="text-xl font-semibold text-slate-900">Itens</h2>
+      {% if itens %}
+        <span class="text-xs font-medium text-slate-500">
+          {{ itens|length }} {{ itens|length|pluralize:"item,itens" }}
+        </span>
+      {% endif %}
+    </div>
 
     {% if itens %}
       {% with estado=requisicao.estado %}
@@ -118,9 +125,9 @@
     {% endif %}
   </section>
 
-  {# --- 3. Timeline --- #}
-  <section class="mb-6 rounded-xl border border-slate-200 bg-white p-6 shadow-sm">
-    <h2 class="text-lg font-medium text-slate-900 mb-4">Histórico</h2>
+  {# --- 3. Timeline (suporte/auditoria, peso secundário) --- #}
+  <section class="mb-6 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:p-6">
+    <h2 class="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Histórico</h2>
     {% include "requisicoes/partials/_timeline.html" with eventos=eventos %}
   </section>
 
