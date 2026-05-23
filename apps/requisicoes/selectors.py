@@ -1,12 +1,15 @@
 """Seletores de leitura para requisições.
 
-Concentram queries não-triviais: autocomplete de materiais elegíveis.
+Concentram queries não-triviais: autocomplete de materiais elegíveis e
+escopo de visibilidade de requisições por papel (ADR-0004).
 Leituras triviais podem usar o ORM direto na view.
 """
 
 from django.db.models import F, Q, QuerySet
 
+from apps.accounts.models import SetorClassificacao, User, VinculoAuxiliar
 from apps.estoque.models import Material
+from apps.requisicoes.models import EstadoRequisicao, Requisicao
 
 
 def materiais_para_requisicao(q: str = '', limite: int = 20) -> QuerySet:
@@ -25,6 +28,88 @@ def materiais_para_requisicao(q: str = '', limite: int = 20) -> QuerySet:
     if q:
         qs = qs.filter(Q(codigo__icontains=q) | Q(nome__icontains=q))
     return qs.order_by('nome')[:limite]
+
+
+def _setores_chefiados_nao_almox(ator: User) -> list[int]:
+    """IDs dos setores não-almoxarifado chefiados pelo ator."""
+    try:
+        setor = ator.setor_chefiado
+    except Exception:
+        return []
+    if not setor.ativo or setor.classificacao == SetorClassificacao.ALMOXARIFADO:
+        return []
+    return [setor.pk]
+
+
+def _eh_almoxarifado(ator: User) -> bool:
+    """True se o ator tem papel ativo de chefe ou auxiliar de almoxarifado."""
+    try:
+        setor = ator.setor_chefiado
+        if (
+            setor.ativo
+            and setor.classificacao == SetorClassificacao.ALMOXARIFADO
+        ):
+            return True
+    except Exception:
+        pass
+    return VinculoAuxiliar.objects.filter(
+        usuario=ator,
+        ativo=True,
+        setor__ativo=True,
+        setor__classificacao=SetorClassificacao.ALMOXARIFADO,
+    ).exists()
+
+
+def requisicoes_visiveis_para(ator_id: int) -> QuerySet[Requisicao]:
+    """Queryset das requisições visíveis pelo ator (matriz §5).
+
+    Regras:
+    - Criador sempre vê (inclui rascunhos próprios).
+    - Beneficiário vê fora de rascunho.
+    - Chefe de setor não-almox vê requisições do setor (exceto rascunhos de terceiros).
+    - Almoxarifado (chefe ou aux) vê todas (exceto rascunhos de terceiros).
+    - Superusuário vê todas.
+    - Usuário inativo: queryset vazio.
+    """
+    base_qs = Requisicao.objects.select_related(
+        'criador', 'beneficiario', 'setor_beneficiario'
+    )
+    try:
+        ator = User.objects.get(pk=ator_id)
+    except User.DoesNotExist:
+        return base_qs.none()
+
+    if not ator.is_active:
+        return base_qs.none()
+
+    if ator.is_superuser:
+        return base_qs.all()
+
+    nao_rascunho = ~Q(estado=EstadoRequisicao.RASCUNHO)
+    filtro = Q(criador_id=ator.pk) | (Q(beneficiario_id=ator.pk) & nao_rascunho)
+
+    setores_chefiados = _setores_chefiados_nao_almox(ator)
+    if setores_chefiados:
+        filtro |= Q(setor_beneficiario_id__in=setores_chefiados) & nao_rascunho
+
+    if _eh_almoxarifado(ator):
+        filtro |= nao_rascunho
+
+    return base_qs.filter(filtro).distinct()
+
+
+def minhas_requisicoes(ator_id: int) -> QuerySet[Requisicao]:
+    """Subconjunto de ``requisicoes_visiveis_para`` filtrado pelo próprio ator.
+
+    Inclui requisições onde o ator é criador OU beneficiário (fora de rascunho).
+    Exclui rascunhos de terceiros mesmo se ator for beneficiário.
+    Ordenado por ``-criado_em``.
+    """
+    visiveis = requisicoes_visiveis_para(ator_id)
+    nao_rascunho = ~Q(estado=EstadoRequisicao.RASCUNHO)
+    return visiveis.filter(
+        Q(criador_id=ator_id) | (Q(beneficiario_id=ator_id) & nao_rascunho)
+    ).order_by('-criado_em')
 
 
 def material_eh_elegivel(material: Material) -> bool:
