@@ -179,6 +179,92 @@
     </section>
   {% endif %}
 
+  {% if pode_retornar or pode_recusar %}
+    <section
+      class="mb-6 rounded-xl border border-slate-200 bg-white p-4 shadow-sm sm:p-5"
+      aria-labelledby="decisao-autorizacao-titulo"
+    >
+      <div class="mb-4">
+        <h2 id="decisao-autorizacao-titulo" class="text-sm font-semibold text-slate-900">
+          Decisão de autorização
+        </h2>
+        <p class="mt-1 text-sm text-slate-600">
+          Revise beneficiário, setor e itens antes de registrar a decisão.
+        </p>
+      </div>
+
+      <div class="grid grid-cols-1 gap-4 lg:grid-cols-2">
+        {% if pode_retornar %}
+          <form
+            method="post"
+            action="{% url 'requisicoes:retornar_rascunho' requisicao.pk %}"
+            data-prevent-double-submit
+            class="rounded-lg border border-amber-200 bg-amber-50 p-4"
+          >
+            {% csrf_token %}
+            <label for="observacao-retorno" class="block text-sm font-medium text-amber-950">
+              Observação do retorno
+            </label>
+            <p class="mt-1 text-xs text-amber-900">
+              Opcional. A requisição volta a ser rascunho visível apenas ao criador.
+            </p>
+            <textarea
+              id="observacao-retorno"
+              name="observacao"
+              rows="3"
+              class="mt-3 block w-full rounded-md border border-amber-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1"
+            ></textarea>
+            <button
+              type="submit"
+              class="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-md border border-amber-700 bg-white px-4 py-2 text-sm font-semibold text-amber-900 shadow-sm hover:bg-amber-100 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-amber-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              data-submit-loading-label="Retornando…"
+            >
+              <span data-submit-text>Confirmar retorno</span>
+            </button>
+          </form>
+        {% endif %}
+
+        {% if pode_recusar %}
+          <form
+            method="post"
+            action="{% url 'requisicoes:recusar' requisicao.pk %}"
+            data-prevent-double-submit
+            class="rounded-lg border border-red-200 bg-red-50 p-4"
+          >
+            {% csrf_token %}
+            <label for="motivo-recusa" class="block text-sm font-medium text-red-950">
+              Motivo da recusa <span aria-hidden="true">*</span>
+            </label>
+            <p class="mt-1 text-xs text-red-900">
+              Obrigatório. A recusa encerra a requisição sem reservar ou baixar estoque.
+            </p>
+            <textarea
+              id="motivo-recusa"
+              name="motivo"
+              rows="3"
+              required
+              aria-required="true"
+              {% if recusa_erro %}aria-invalid="true" aria-describedby="motivo-recusa-erro"{% endif %}
+              class="mt-3 block w-full rounded-md border border-red-300 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1"
+            >{{ motivo_recusa }}</textarea>
+            {% if recusa_erro %}
+              <p id="motivo-recusa-erro" class="mt-2 text-sm font-medium text-red-700" role="alert">
+                {{ recusa_erro }}
+              </p>
+            {% endif %}
+            <button
+              type="submit"
+              class="mt-3 inline-flex min-h-11 w-full items-center justify-center rounded-md bg-red-600 px-4 py-2 text-sm font-semibold text-white shadow-sm hover:bg-red-700 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-red-500 focus-visible:ring-offset-1 disabled:cursor-not-allowed disabled:opacity-60 sm:w-auto"
+              data-submit-loading-label="Recusando…"
+            >
+              <span data-submit-text>Confirmar recusa</span>
+            </button>
+          </form>
+        {% endif %}
+      </div>
+    </section>
+  {% endif %}
+
   {# --- 3. Timeline (suporte/auditoria, peso secundário) --- #}
   <section class="mb-6 rounded-xl border border-slate-200 bg-slate-50/60 p-4 sm:p-6">
     <h2 class="mb-4 text-sm font-semibold uppercase tracking-wide text-slate-500">Histórico</h2>

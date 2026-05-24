@@ -777,3 +777,170 @@ def test_detalhe_nao_exibe_link_editar_em_estado_nao_rascunho(
     response = client.get(reverse('requisicoes:detalhe', kwargs={'pk': req.pk}))
     assert response.status_code == 200
     assert response.context['pode_editar'] is False
+
+
+# ---------------------------------------------------------------------------
+# Fila de autorização, retorno e recusa — TR-006 / TR-011
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_fila_autorizacao_sem_login_redireciona(client):
+    response = client.get(reverse('requisicoes:autorizacoes'))
+    assert response.status_code == 302
+
+
+@pytest.mark.django_db
+def test_fila_autorizacao_chefe_renderiza_apenas_setor(
+    client, chefe_obras, req_enviada_solicitante, req_outro_setor_view
+):
+    _login(client, chefe_obras)
+    response = client.get(reverse('requisicoes:autorizacoes'))
+
+    assert response.status_code == 200
+    requisicoes = list(response.context['requisicoes'])
+    assert req_enviada_solicitante in requisicoes
+    assert req_outro_setor_view not in requisicoes
+    html = response.content.decode('utf-8')
+    assert 'Fila de autorização' in html
+    assert 'Analisar' in html
+
+
+@pytest.mark.django_db
+def test_fila_autorizacao_ator_sem_permissao_retorna_403(client, solicitante):
+    _login(client, solicitante)
+    response = client.get(reverse('requisicoes:autorizacoes'))
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_retornar_rascunho_post_criador_redireciona_e_muda_estado(
+    client, solicitante, req_enviada_solicitante
+):
+    _login(client, solicitante)
+    response = client.post(
+        reverse(
+            'requisicoes:retornar_rascunho', kwargs={'pk': req_enviada_solicitante.pk}
+        ),
+        {'observacao': 'Corrigir item.'},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse(
+        'requisicoes:detalhe', kwargs={'pk': req_enviada_solicitante.pk}
+    )
+    req_enviada_solicitante.refresh_from_db()
+    assert req_enviada_solicitante.estado == EstadoRequisicao.RASCUNHO
+
+
+@pytest.mark.django_db
+def test_retornar_rascunho_chefe_nao_pode_retornar(
+    client, chefe_obras, req_enviada_solicitante
+):
+    _login(client, chefe_obras)
+    response = client.post(
+        reverse(
+            'requisicoes:retornar_rascunho', kwargs={'pk': req_enviada_solicitante.pk}
+        )
+    )
+    assert response.status_code == 403
+    req_enviada_solicitante.refresh_from_db()
+    assert req_enviada_solicitante.estado == EstadoRequisicao.AGUARDANDO_AUTORIZACAO
+
+
+@pytest.mark.django_db
+def test_recusar_requisicao_post_chefe_redireciona_e_muda_estado(
+    client, chefe_obras, req_enviada_solicitante
+):
+    _login(client, chefe_obras)
+    response = client.post(
+        reverse('requisicoes:recusar', kwargs={'pk': req_enviada_solicitante.pk}),
+        {'motivo': 'Necessário revisar quantidades.'},
+    )
+
+    assert response.status_code == 302
+    assert response.url == reverse(
+        'requisicoes:detalhe', kwargs={'pk': req_enviada_solicitante.pk}
+    )
+    req_enviada_solicitante.refresh_from_db()
+    assert req_enviada_solicitante.estado == EstadoRequisicao.RECUSADA
+
+
+@pytest.mark.django_db
+def test_recusar_requisicao_sem_motivo_retorna_erro_inline(
+    client, chefe_obras, req_enviada_solicitante
+):
+    _login(client, chefe_obras)
+    response = client.post(
+        reverse('requisicoes:recusar', kwargs={'pk': req_enviada_solicitante.pk}),
+        {'motivo': ' '},
+    )
+
+    assert response.status_code == 200
+    req_enviada_solicitante.refresh_from_db()
+    assert req_enviada_solicitante.estado == EstadoRequisicao.AGUARDANDO_AUTORIZACAO
+    html = response.content.decode('utf-8')
+    assert 'motivo-recusa-erro' in html
+    assert 'Informe o motivo da recusa.' in html
+
+
+@pytest.mark.django_db
+def test_recusar_requisicao_outro_setor_retorna_403(
+    client, chefe_almoxarifado, req_enviada_solicitante
+):
+    _login(client, chefe_almoxarifado)
+    response = client.post(
+        reverse('requisicoes:recusar', kwargs={'pk': req_enviada_solicitante.pk}),
+        {'motivo': 'Não aprovado.'},
+    )
+    assert response.status_code == 403
+
+
+@pytest.mark.django_db
+def test_detalhe_exibe_recusa_para_chefe_e_nao_exibe_retorno(
+    client, chefe_obras, req_enviada_solicitante
+):
+    _login(client, chefe_obras)
+    response = client.get(
+        reverse('requisicoes:detalhe', kwargs={'pk': req_enviada_solicitante.pk})
+    )
+    html = response.content.decode('utf-8')
+
+    assert response.status_code == 200
+    assert response.context['pode_recusar'] is True
+    assert response.context['pode_retornar'] is False
+    assert 'Confirmar recusa' in html
+    assert 'Confirmar retorno' not in html
+
+
+@pytest.mark.django_db
+def test_detalhe_exibe_retorno_para_criador_e_nao_exibe_recusa(
+    client, solicitante, req_enviada_solicitante
+):
+    _login(client, solicitante)
+    response = client.get(
+        reverse('requisicoes:detalhe', kwargs={'pk': req_enviada_solicitante.pk})
+    )
+    html = response.content.decode('utf-8')
+
+    assert response.status_code == 200
+    assert response.context['pode_retornar'] is True
+    assert response.context['pode_recusar'] is False
+    assert 'Confirmar retorno' in html
+    assert 'Confirmar recusa' not in html
+
+
+@pytest.mark.django_db
+def test_recusar_requisicao_htmx_retorna_hx_redirect(
+    client, chefe_obras, req_enviada_solicitante
+):
+    _login(client, chefe_obras)
+    response = client.post(
+        reverse('requisicoes:recusar', kwargs={'pk': req_enviada_solicitante.pk}),
+        {'motivo': 'Não aprovado.'},
+        HTTP_HX_REQUEST='true',
+    )
+    assert response.status_code == 204
+    assert response['HX-Redirect'] == reverse(
+        'requisicoes:detalhe', kwargs={'pk': req_enviada_solicitante.pk}
+    )

@@ -112,7 +112,9 @@ def minhas_requisicoes(ator_id: int) -> QuerySet[Requisicao]:
 def fila_autorizacao(ator_id: int) -> QuerySet[Requisicao]:
     """Fila de requisições aguardando autorização para chefias autorizadoras."""
     base_qs = (
-        Requisicao.objects.select_related('criador', 'beneficiario', 'setor_beneficiario')
+        Requisicao.objects.select_related(
+            'criador', 'beneficiario', 'setor_beneficiario'
+        )
         .filter(estado=EstadoRequisicao.AGUARDANDO_AUTORIZACAO)
         .annotate(quantidade_itens=Count('itens'))
         .order_by('atualizado_em', 'criado_em', 'id')

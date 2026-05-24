@@ -27,11 +27,15 @@ from apps.requisicoes.forms import (
 from apps.requisicoes.models import Requisicao
 from apps.requisicoes.policies import (
     exigir_pode_editar_rascunho,
+    exigir_pode_ver_fila_autorizacao,
     pode_editar_rascunho,
     pode_enviar_rascunho,
+    pode_recusar_requisicao,
+    pode_retornar_para_rascunho,
     resolver_escopo_criacao_requisicao,
 )
 from apps.requisicoes.selectors import (
+    fila_autorizacao,
     materiais_para_requisicao,
     minhas_requisicoes,
     requisicoes_visiveis_para,
@@ -40,6 +44,8 @@ from apps.requisicoes.services import (
     criar_requisicao,
     editar_rascunho,
     enviar_para_autorizacao,
+    recusar_requisicao,
+    retornar_para_rascunho,
 )
 
 
@@ -50,6 +56,60 @@ def _htmx_redirect(request, url: str) -> HttpResponse:
         response['HX-Redirect'] = url
         return response
     return redirect(url)
+
+
+def _voltar_url(request) -> str:
+    next_url = request.GET.get('next', '')
+    if not url_has_allowed_host_and_scheme(
+        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
+    ):
+        next_url = reverse('requisicoes:minhas')
+    return next_url
+
+
+def _detalhe_context(
+    request,
+    requisicao: Requisicao,
+    *,
+    recusa_erro: str = '',
+    motivo_recusa: str = '',
+):
+    itens = list(requisicao.itens.select_related('material').all())
+    eventos = list(
+        requisicao.eventos.select_related('ator').order_by('-criado_em', '-id')
+    )
+    return {
+        'requisicao': requisicao,
+        'itens': itens,
+        'eventos': eventos,
+        'voltar_url': _voltar_url(request),
+        'pode_enviar': (
+            requisicao.estado == 'rascunho'
+            and pode_enviar_rascunho(request.user, requisicao)
+        ),
+        'pode_editar': (
+            requisicao.estado == 'rascunho'
+            and pode_editar_rascunho(request.user, requisicao)
+        ),
+        'pode_retornar': (
+            requisicao.estado == 'aguardando_autorizacao'
+            and pode_retornar_para_rascunho(request.user, requisicao)
+        ),
+        'pode_recusar': (
+            requisicao.estado == 'aguardando_autorizacao'
+            and pode_recusar_requisicao(request.user, requisicao)
+        ),
+        'recusa_erro': recusa_erro,
+        'motivo_recusa': motivo_recusa,
+    }
+
+
+def _render_detalhe(request, requisicao: Requisicao, **contexto_extra):
+    return render(
+        request,
+        'requisicoes/detalhe.html',
+        _detalhe_context(request, requisicao, **contexto_extra),
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -324,6 +384,28 @@ def minhas_requisicoes_view(request):
 
 
 # ---------------------------------------------------------------------------
+# Fila de autorização — lista
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@require_GET
+def fila_autorizacao_view(request):
+    """Lista requisições aguardando autorização no escopo da chefia."""
+    try:
+        exigir_pode_ver_fila_autorizacao(request.user)
+    except PermissaoNegada as exc:
+        raise PermissionDenied(str(exc))
+
+    requisicoes = fila_autorizacao(request.user.pk)
+    return render(
+        request,
+        'requisicoes/fila_autorizacao.html',
+        {'requisicoes': requisicoes},
+    )
+
+
+# ---------------------------------------------------------------------------
 # Detalhe da requisição
 # ---------------------------------------------------------------------------
 
@@ -341,35 +423,7 @@ def detalhe_requisicao_view(request, pk: int):
         requisicoes_visiveis_para(request.user.pk),
         pk=pk,
     )
-    itens = list(requisicao.itens.select_related('material').all())
-    eventos = list(
-        requisicao.eventos.select_related('ator').order_by('-criado_em', '-id')
-    )
-
-    next_url = request.GET.get('next', '')
-    if not url_has_allowed_host_and_scheme(
-        next_url, allowed_hosts={request.get_host()}, require_https=request.is_secure()
-    ):
-        next_url = reverse('requisicoes:minhas')
-
-    return render(
-        request,
-        'requisicoes/detalhe.html',
-        {
-            'requisicao': requisicao,
-            'itens': itens,
-            'eventos': eventos,
-            'voltar_url': next_url,
-            'pode_enviar': (
-                requisicao.estado == 'rascunho'
-                and pode_enviar_rascunho(request.user, requisicao)
-            ),
-            'pode_editar': (
-                requisicao.estado == 'rascunho'
-                and pode_editar_rascunho(request.user, requisicao)
-            ),
-        },
-    )
+    return _render_detalhe(request, requisicao)
 
 
 # ---------------------------------------------------------------------------
@@ -403,4 +457,67 @@ def enviar_rascunho_view(request, pk: int):
         request,
         f'Requisição enviada para autorização. Número {requisicao.numero_publico}.',
     )
+    return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[requisicao.pk]))
+
+
+# ---------------------------------------------------------------------------
+# Retornar para rascunho / recusar — TR-006 / TR-011
+# ---------------------------------------------------------------------------
+
+
+@login_required
+@require_http_methods(['POST'])
+def retornar_rascunho_view(request, pk: int):
+    """Retorna requisição aguardando autorização para rascunho."""
+    try:
+        requisicao = retornar_para_rascunho(
+            ator_id=request.user.pk,
+            requisicao_id=pk,
+            observacao=request.POST.get('observacao', ''),
+        )
+    except PermissaoNegada as exc:
+        raise PermissionDenied(str(exc))
+    except EstadoInvalido as exc:
+        messages.warning(request, str(exc))
+        return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[pk]))
+    except DadosInvalidos as exc:
+        messages.error(request, str(exc))
+        return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[pk]))
+
+    messages.success(
+        request,
+        f'Requisição {requisicao.numero_publico} retornada para rascunho.',
+    )
+    return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[requisicao.pk]))
+
+
+@login_required
+@require_http_methods(['POST'])
+def recusar_requisicao_view(request, pk: int):
+    """Recusa requisição aguardando autorização com motivo obrigatório."""
+    motivo = request.POST.get('motivo', '')
+    try:
+        requisicao = recusar_requisicao(
+            ator_id=request.user.pk,
+            requisicao_id=pk,
+            motivo=motivo,
+        )
+    except PermissaoNegada as exc:
+        raise PermissionDenied(str(exc))
+    except DadosInvalidos as exc:
+        requisicao = get_object_or_404(
+            requisicoes_visiveis_para(request.user.pk),
+            pk=pk,
+        )
+        return _render_detalhe(
+            request,
+            requisicao,
+            recusa_erro=str(exc),
+            motivo_recusa=motivo,
+        )
+    except EstadoInvalido as exc:
+        messages.warning(request, str(exc))
+        return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[pk]))
+
+    messages.success(request, f'Requisição {requisicao.numero_publico} recusada.')
     return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[requisicao.pk]))
