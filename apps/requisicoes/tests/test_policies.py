@@ -14,7 +14,9 @@ from apps.requisicoes.policies import (
     pode_autorizar_requisicao,
     pode_recusar_requisicao,
     pode_retornar_para_rascunho,
+    pode_separar_para_retirada,
     pode_ser_beneficiario,
+    pode_ver_fila_atendimento,
     pode_ver_fila_autorizacao,
     resolver_escopo_criacao_requisicao,
 )
@@ -384,3 +386,127 @@ def test_chefe_almox_nao_recusa_requisicao_de_outro_setor(
         setor_beneficiario=setor_obras,
     )
     assert pode_recusar_requisicao(chefe_almoxarifado, req) is False
+
+
+# ---------------------------------------------------------------------------
+# pode_ver_fila_atendimento / pode_separar_para_retirada
+# ---------------------------------------------------------------------------
+
+
+@pytest.mark.django_db
+def test_chefe_almox_pode_ver_fila_atendimento(chefe_almoxarifado):
+    assert pode_ver_fila_atendimento(chefe_almoxarifado) is True
+
+
+@pytest.mark.django_db
+def test_aux_almox_pode_ver_fila_atendimento(aux_almoxarifado):
+    assert pode_ver_fila_atendimento(aux_almoxarifado) is True
+
+
+@pytest.mark.django_db
+def test_chefe_setor_nao_pode_ver_fila_atendimento(chefe_obras):
+    assert pode_ver_fila_atendimento(chefe_obras) is False
+
+
+@pytest.mark.django_db
+def test_aux_setor_nao_pode_ver_fila_atendimento(aux_obras):
+    assert pode_ver_fila_atendimento(aux_obras) is False
+
+
+@pytest.mark.django_db
+def test_solicitante_nao_pode_ver_fila_atendimento(solicitante):
+    assert pode_ver_fila_atendimento(solicitante) is False
+
+
+@pytest.mark.django_db
+def test_superuser_pode_ver_fila_atendimento(superuser):
+    assert pode_ver_fila_atendimento(superuser) is True
+
+
+@pytest.mark.django_db
+def test_inativo_nao_pode_ver_fila_atendimento(usuario_inativo):
+    assert pode_ver_fila_atendimento(usuario_inativo) is False
+
+
+def _req_estado(estado, solicitante, setor_obras, numero):
+    return Requisicao.objects.create(
+        estado=estado,
+        numero_publico=numero,
+        criador=solicitante,
+        beneficiario=solicitante,
+        setor_beneficiario=setor_obras,
+    )
+
+
+@pytest.mark.django_db
+def test_aux_almox_pode_separar_requisicao_autorizada(
+    aux_almoxarifado, solicitante, setor_obras
+):
+    req = _req_estado(
+        EstadoRequisicao.AUTORIZADA, solicitante, setor_obras, 'REQ-2026-000200'
+    )
+    assert pode_separar_para_retirada(aux_almoxarifado, req) is True
+
+
+@pytest.mark.django_db
+def test_chefe_almox_pode_separar_requisicao_autorizada(
+    chefe_almoxarifado, solicitante, setor_obras
+):
+    req = _req_estado(
+        EstadoRequisicao.AUTORIZADA, solicitante, setor_obras, 'REQ-2026-000201'
+    )
+    assert pode_separar_para_retirada(chefe_almoxarifado, req) is True
+
+
+@pytest.mark.django_db
+def test_superuser_pode_separar_requisicao_autorizada(
+    superuser, solicitante, setor_obras
+):
+    req = _req_estado(
+        EstadoRequisicao.AUTORIZADA, solicitante, setor_obras, 'REQ-2026-000202'
+    )
+    assert pode_separar_para_retirada(superuser, req) is True
+
+
+@pytest.mark.django_db
+def test_chefe_setor_nao_pode_separar(chefe_obras, solicitante, setor_obras):
+    req = _req_estado(
+        EstadoRequisicao.AUTORIZADA, solicitante, setor_obras, 'REQ-2026-000203'
+    )
+    assert pode_separar_para_retirada(chefe_obras, req) is False
+
+
+@pytest.mark.django_db
+def test_solicitante_nao_pode_separar(solicitante, setor_obras):
+    req = _req_estado(
+        EstadoRequisicao.AUTORIZADA, solicitante, setor_obras, 'REQ-2026-000204'
+    )
+    assert pode_separar_para_retirada(solicitante, req) is False
+
+
+@pytest.mark.django_db
+@pytest.mark.parametrize(
+    ('estado', 'numero'),
+    [
+        (EstadoRequisicao.RASCUNHO, 'REQ-2026-000210'),
+        (EstadoRequisicao.AGUARDANDO_AUTORIZACAO, 'REQ-2026-000211'),
+        (EstadoRequisicao.PRONTA_PARA_RETIRADA, 'REQ-2026-000212'),
+        (EstadoRequisicao.ATENDIDA, 'REQ-2026-000213'),
+        (EstadoRequisicao.RECUSADA, 'REQ-2026-000214'),
+        (EstadoRequisicao.CANCELADA, 'REQ-2026-000215'),
+        (EstadoRequisicao.ESTORNADA, 'REQ-2026-000216'),
+    ],
+)
+def test_aux_almox_nao_pode_separar_se_estado_origem_invalido(
+    estado, numero, aux_almoxarifado, solicitante, setor_obras
+):
+    req = _req_estado(estado, solicitante, setor_obras, numero)
+    assert pode_separar_para_retirada(aux_almoxarifado, req) is False
+
+
+@pytest.mark.django_db
+def test_inativo_nao_pode_separar(usuario_inativo, solicitante, setor_obras):
+    req = _req_estado(
+        EstadoRequisicao.AUTORIZADA, solicitante, setor_obras, 'REQ-2026-000300'
+    )
+    assert pode_separar_para_retirada(usuario_inativo, req) is False
