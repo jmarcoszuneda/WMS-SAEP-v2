@@ -450,7 +450,6 @@ def autorizar_requisicao(
     return requisicao
 
 
-
 @transaction.atomic
 def separar_para_retirada(
     *,
@@ -482,9 +481,7 @@ def separar_para_retirada(
             'Esta requisição não está autorizada para separação.',
             code='estado_origem_invalido',
         )
-    verificar_transicao_valida(
-        requisicao.estado, EstadoRequisicao.PRONTA_PARA_RETIRADA
-    )
+    verificar_transicao_valida(requisicao.estado, EstadoRequisicao.PRONTA_PARA_RETIRADA)
 
     requisicao.estado = EstadoRequisicao.PRONTA_PARA_RETIRADA
     requisicao.save(update_fields=['estado', 'atualizado_em'])

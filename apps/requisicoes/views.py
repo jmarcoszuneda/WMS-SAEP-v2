@@ -32,16 +32,19 @@ from apps.requisicoes.forms import (
 from apps.requisicoes.models import Requisicao
 from apps.requisicoes.policies import (
     exigir_pode_editar_rascunho,
+    exigir_pode_ver_fila_atendimento,
     exigir_pode_ver_fila_autorizacao,
     pode_autorizar_requisicao,
     pode_editar_rascunho,
     pode_enviar_rascunho,
     pode_recusar_requisicao,
     pode_retornar_para_rascunho,
+    pode_separar_para_retirada,
     pode_ver_fila_autorizacao,
     resolver_escopo_criacao_requisicao,
 )
 from apps.requisicoes.selectors import (
+    fila_atendimento,
     fila_autorizacao,
     materiais_para_requisicao,
     minhas_requisicoes,
@@ -54,6 +57,7 @@ from apps.requisicoes.services import (
     enviar_para_autorizacao,
     recusar_requisicao,
     retornar_para_rascunho,
+    separar_para_retirada,
 )
 
 
@@ -113,6 +117,7 @@ def _detalhe_context(
             requisicao.estado == 'aguardando_autorizacao'
             and pode_recusar_requisicao(request.user, requisicao)
         ),
+        'pode_separar_retirada': pode_separar_para_retirada(request.user, requisicao),
         'recusa_erro': recusa_erro,
         'motivo_recusa': motivo_recusa,
     }
@@ -477,6 +482,50 @@ def autorizar_requisicao_view(request, pk: int):
     messages.success(
         request,
         f'Requisição {requisicao.numero_publico} autorizada com sucesso.',
+    )
+    return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[requisicao.pk]))
+
+
+@login_required
+@require_GET
+def fila_atendimento_view(request):
+    """Lista requisições autorizadas/prontas para almoxarifado."""
+    try:
+        exigir_pode_ver_fila_atendimento(request.user)
+    except PermissaoNegada as exc:
+        raise PermissionDenied(str(exc))
+
+    requisicoes = fila_atendimento(request.user.pk)
+    return render(
+        request,
+        'requisicoes/fila_atendimento.html',
+        {'requisicoes': requisicoes},
+    )
+
+
+@login_required
+@require_http_methods(['POST'])
+def separar_retirada_view(request, pk: int):
+    """Aplica TR-009 (autorizada -> pronta_para_retirada)."""
+    get_object_or_404(requisicoes_visiveis_para(request.user.pk), pk=pk)
+    try:
+        requisicao = separar_para_retirada(
+            ator_id=request.user.pk,
+            requisicao_id=pk,
+        )
+    except PermissaoNegada as exc:
+        raise PermissionDenied(str(exc))
+    except EstadoInvalido as exc:
+        messages.warning(request, str(exc))
+        return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[pk]))
+    except DadosInvalidos as exc:
+        messages.error(request, str(exc))
+        return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[pk]))
+
+    numero = requisicao.numero_publico or f'#{requisicao.pk}'
+    messages.success(
+        request,
+        f'Requisição {numero} pronta para retirada.',
     )
     return _htmx_redirect(request, reverse('requisicoes:detalhe', args=[requisicao.pk]))
 

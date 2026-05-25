@@ -141,7 +141,6 @@ def fila_autorizacao(ator_id: int) -> QuerySet[Requisicao]:
     return base_qs.filter(setor_beneficiario_id=setor_chefiado.pk)
 
 
-
 def fila_atendimento(ator_id: int) -> QuerySet[Requisicao]:
     """Fila de requisições prontas para separação/retirada pelo almoxarifado."""
     base_qs = (
