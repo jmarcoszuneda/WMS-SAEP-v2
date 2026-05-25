@@ -34,6 +34,8 @@ def test_home_usa_layout_autenticado(client):
     assert 'p-6' in conteudo
     assert 'Operador Home' in conteudo
     assert 'HOME-001' in conteudo
+    assert 'Minhas requisições' in conteudo
+    assert 'Nova requisição' in conteudo
 
 
 def test_seed_dev_exige_flag_de_ambiente_local(settings, monkeypatch):
