@@ -45,8 +45,9 @@ Thumbs.db
 # Git worktrees
 .worktrees/
 
-# Local Claude worktree artifacts
+# Local Claude artifacts
 .claude/worktrees/
+.claude/*.lock
 
 # Code review artefacts
 docs/code-reviews/
