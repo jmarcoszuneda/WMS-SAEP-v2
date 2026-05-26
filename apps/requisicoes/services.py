@@ -297,20 +297,17 @@ def enviar_para_autorizacao(
 # ---------------------------------------------------------------------------
 
 
-@transaction.atomic
-def descartar_rascunho(*, ator_id: int, requisicao_id: int) -> None:
-    """Descarta rascunho nunca enviado sem registrar timeline (TR-003)."""
+def _descartar_rascunho_impl(
+    *,
+    requisicao: Requisicao,
+    ator_id: int,
+    justificativa: str | None = None,
+) -> None:
     try:
         ator = User.objects.get(pk=ator_id)
     except User.DoesNotExist:
         raise DadosInvalidos(
             'Ator não encontrado.', code='ator_nao_encontrado'
-        ) from None
-    try:
-        requisicao = Requisicao.objects.select_for_update().get(pk=requisicao_id)
-    except Requisicao.DoesNotExist:
-        raise DadosInvalidos(
-            'Requisição não encontrada.', code='requisicao_nao_encontrada'
         ) from None
 
     if requisicao.estado != EstadoRequisicao.RASCUNHO:
@@ -326,6 +323,19 @@ def descartar_rascunho(*, ator_id: int, requisicao_id: int) -> None:
 
     exigir_pode_cancelar_requisicao(ator, requisicao)
     requisicao.delete()
+
+
+@transaction.atomic
+def descartar_rascunho(*, ator_id: int, requisicao_id: int) -> None:
+    """Descarta rascunho nunca enviado sem registrar timeline (TR-003)."""
+    try:
+        requisicao = Requisicao.objects.select_for_update().get(pk=requisicao_id)
+    except Requisicao.DoesNotExist:
+        raise DadosInvalidos(
+            'Requisição não encontrada.', code='requisicao_nao_encontrada'
+        ) from None
+
+    _descartar_rascunho_impl(requisicao=requisicao, ator_id=ator_id)
 
 
 @transaction.atomic
@@ -347,35 +357,31 @@ def cancelar_ou_descartar_requisicao(
         requisicao.estado == EstadoRequisicao.RASCUNHO
         and requisicao.numero_publico is None
     ):
-        descartar_rascunho(ator_id=ator_id, requisicao_id=requisicao_id)
+        _descartar_rascunho_impl(
+            requisicao=requisicao,
+            ator_id=ator_id,
+            justificativa=justificativa,
+        )
         return None
 
-    return cancelar_requisicao(
+    return _cancelar_requisicao_impl(
+        requisicao=requisicao,
         ator_id=ator_id,
-        requisicao_id=requisicao_id,
         justificativa=justificativa or '',
     )
 
 
-@transaction.atomic
-def cancelar_requisicao(
+def _cancelar_requisicao_impl(
     *,
+    requisicao: Requisicao,
     ator_id: int,
-    requisicao_id: int,
-    justificativa: str = '',
+    justificativa: str | None = '',
 ) -> Requisicao:
-    """Cancela requisição antes da retirada final (TR-004/TR-012/TR-013/TR-014)."""
     try:
         ator = User.objects.get(pk=ator_id)
     except User.DoesNotExist:
         raise DadosInvalidos(
             'Ator não encontrado.', code='ator_nao_encontrado'
-        ) from None
-    try:
-        requisicao = Requisicao.objects.select_for_update().get(pk=requisicao_id)
-    except Requisicao.DoesNotExist:
-        raise DadosInvalidos(
-            'Requisição não encontrada.', code='requisicao_nao_encontrada'
         ) from None
 
     if requisicao.estado not in (
@@ -486,6 +492,28 @@ def cancelar_requisicao(
     )
 
     return requisicao
+
+
+@transaction.atomic
+def cancelar_requisicao(
+    *,
+    ator_id: int,
+    requisicao_id: int,
+    justificativa: str = '',
+) -> Requisicao:
+    """Cancela requisição antes da retirada final (TR-004/TR-012/TR-013/TR-014)."""
+    try:
+        requisicao = Requisicao.objects.select_for_update().get(pk=requisicao_id)
+    except Requisicao.DoesNotExist:
+        raise DadosInvalidos(
+            'Requisição não encontrada.', code='requisicao_nao_encontrada'
+        ) from None
+
+    return _cancelar_requisicao_impl(
+        requisicao=requisicao,
+        ator_id=ator_id,
+        justificativa=justificativa,
+    )
 
 
 @transaction.atomic
