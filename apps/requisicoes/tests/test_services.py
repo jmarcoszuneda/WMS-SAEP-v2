@@ -15,10 +15,11 @@ from apps.core.exceptions import (
 )
 from apps.requisicoes.models import EstadoRequisicao, EventoTimeline, Requisicao
 from apps.requisicoes.services import (
+    autorizar_requisicao,
     criar_requisicao,
     editar_rascunho,
-    autorizar_requisicao,
     recusar_requisicao,
+    registrar_atendimento,
     retornar_para_rascunho,
     separar_para_retirada,
 )
@@ -1098,3 +1099,419 @@ def test_separar_para_retirada_idempotencia_bloqueia_segunda_execucao(
             ator_id=aux_almoxarifado.pk,
             requisicao_id=requisicao_autorizada.pk,
         )
+
+
+# ---------------------------------------------------------------------------
+# TR-016 / TR-017 / TR-018: registrar_atendimento
+# ---------------------------------------------------------------------------
+
+
+@pytest.fixture
+def requisicao_pronta_retirada(requisicao_autorizada, aux_almoxarifado):
+    return separar_para_retirada(
+        ator_id=aux_almoxarifado.pk,
+        requisicao_id=requisicao_autorizada.pk,
+    )
+
+
+@pytest.fixture
+def requisicao_pronta_retirada_multi(
+    solicitante,
+    chefe_obras,
+    aux_almoxarifado,
+    material_disponivel,
+    material_disponivel_2,
+):
+    from apps.requisicoes.services import enviar_para_autorizacao
+
+    req = criar_requisicao(
+        ator_id=solicitante.pk,
+        beneficiario_id=solicitante.pk,
+        itens=[
+            {
+                'material_id': material_disponivel.pk,
+                'quantidade_solicitada': Decimal('2'),
+            },
+            {
+                'material_id': material_disponivel_2.pk,
+                'quantidade_solicitada': Decimal('3'),
+            },
+        ],
+    )
+    enviar_para_autorizacao(ator_id=solicitante.pk, requisicao_id=req.pk)
+    autorizar_requisicao(ator_id=chefe_obras.pk, requisicao_id=req.pk)
+    return separar_para_retirada(ator_id=aux_almoxarifado.pk, requisicao_id=req.pk)
+
+
+def _payload_total(requisicao):
+    return [
+        {
+            'item_id': item.id,
+            'quantidade_entregue': item.quantidade_autorizada,
+            'justificativa': '',
+        }
+        for item in requisicao.itens.filter(quantidade_autorizada__gt=0).order_by('id')
+    ]
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_total_baixa_fisico_e_zera_reserva(
+    requisicao_pronta_retirada, aux_almoxarifado, material_disponivel
+):
+    from apps.estoque.models import SaldoEstoque
+
+    saldo_antes = SaldoEstoque.objects.get(material=material_disponivel)
+    fisico_antes = saldo_antes.saldo_fisico
+    reservado_antes = saldo_antes.saldo_reservado
+    autorizada = requisicao_pronta_retirada.itens.first().quantidade_autorizada
+
+    req = registrar_atendimento(
+        ator_id=aux_almoxarifado.pk,
+        requisicao_id=requisicao_pronta_retirada.pk,
+        itens=_payload_total(requisicao_pronta_retirada),
+        retirante_nome='Beneficiário',
+    )
+
+    req.refresh_from_db()
+    saldo_depois = SaldoEstoque.objects.get(material=material_disponivel)
+    assert req.estado == EstadoRequisicao.ATENDIDA
+    assert saldo_depois.saldo_fisico == fisico_antes - autorizada
+    assert saldo_depois.saldo_reservado == reservado_antes - autorizada
+    item = req.itens.first()
+    assert item.quantidade_entregue == autorizada
+    evento = req.eventos.filter(evento=EventoTimeline.ATENDIMENTO_TOTAL).get()
+    assert evento.ator_id == aux_almoxarifado.pk
+    assert evento.metadata == {'retirante': 'Beneficiário'}
+    assert not req.eventos.filter(evento=EventoTimeline.LIBERACAO_RESERVA).exists()
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_parcial_libera_reserva_e_registra_evento(
+    requisicao_pronta_retirada, aux_almoxarifado, material_disponivel
+):
+    from apps.estoque.models import SaldoEstoque
+
+    saldo_antes = SaldoEstoque.objects.get(material=material_disponivel)
+    fisico_antes = saldo_antes.saldo_fisico
+    reservado_antes = saldo_antes.saldo_reservado
+    item_unico = requisicao_pronta_retirada.itens.first()
+    autorizada = item_unico.quantidade_autorizada  # 2 (fixture)
+    entregue = autorizada - Decimal('1')
+
+    req = registrar_atendimento(
+        ator_id=aux_almoxarifado.pk,
+        requisicao_id=requisicao_pronta_retirada.pk,
+        itens=[
+            {
+                'item_id': item_unico.id,
+                'quantidade_entregue': entregue,
+                'justificativa': 'Solicitante levou menos do que pediu.',
+            }
+        ],
+        retirante_nome='Carlos',
+        observacao='Retirada parcial.',
+    )
+
+    req.refresh_from_db()
+    saldo_depois = SaldoEstoque.objects.get(material=material_disponivel)
+    assert req.estado == EstadoRequisicao.ATENDIDA
+    assert saldo_depois.saldo_fisico == fisico_antes - entregue
+    assert saldo_depois.saldo_reservado == reservado_antes - autorizada
+    item_unico.refresh_from_db()
+    assert item_unico.quantidade_entregue == entregue
+    assert item_unico.justificativa_entrega == 'Solicitante levou menos do que pediu.'
+    parcial = req.eventos.filter(evento=EventoTimeline.ATENDIMENTO_PARCIAL).get()
+    assert parcial.metadata == {
+        'retirante': 'Carlos',
+        'observacao': 'Retirada parcial.',
+    }
+    liberacao = req.eventos.filter(evento=EventoTimeline.LIBERACAO_RESERVA).get()
+    assert liberacao.metadata == {'origem': 'atendimento_parcial'}
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_sem_entrega_bloqueia(
+    requisicao_pronta_retirada, aux_almoxarifado
+):
+    item = requisicao_pronta_retirada.itens.first()
+    with pytest.raises(EstadoInvalido) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=[
+                {
+                    'item_id': item.id,
+                    'quantidade_entregue': Decimal('0'),
+                    'justificativa': 'Não compareceu',
+                }
+            ],
+            retirante_nome='X',
+        )
+    assert excinfo.value.code == 'atendimento_sem_entrega'
+    requisicao_pronta_retirada.refresh_from_db()
+    assert requisicao_pronta_retirada.estado == EstadoRequisicao.PRONTA_PARA_RETIRADA
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_parcial_sem_justificativa_falha(
+    requisicao_pronta_retirada, aux_almoxarifado
+):
+    item = requisicao_pronta_retirada.itens.first()
+    with pytest.raises(DadosInvalidos) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=[
+                {
+                    'item_id': item.id,
+                    'quantidade_entregue': item.quantidade_autorizada - Decimal('1'),
+                    'justificativa': '',
+                }
+            ],
+            retirante_nome='X',
+        )
+    assert excinfo.value.code == 'justificativa_obrigatoria'
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_entregue_acima_da_autorizada_falha(
+    requisicao_pronta_retirada, aux_almoxarifado
+):
+    item = requisicao_pronta_retirada.itens.first()
+    with pytest.raises(DadosInvalidos) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=[
+                {
+                    'item_id': item.id,
+                    'quantidade_entregue': item.quantidade_autorizada + Decimal('1'),
+                    'justificativa': '',
+                }
+            ],
+            retirante_nome='X',
+        )
+    assert excinfo.value.code == 'quantidade_entregue_invalida'
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_estado_origem_invalido(
+    requisicao_autorizada, aux_almoxarifado
+):
+    item = requisicao_autorizada.itens.first()
+    with pytest.raises(EstadoInvalido) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_autorizada.pk,
+            itens=[
+                {
+                    'item_id': item.id,
+                    'quantidade_entregue': item.quantidade_autorizada,
+                    'justificativa': '',
+                }
+            ],
+            retirante_nome='X',
+        )
+    assert excinfo.value.code == 'estado_origem_invalido'
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_permissao_negada_solicitante(
+    requisicao_pronta_retirada, solicitante
+):
+    with pytest.raises(PermissaoNegada):
+        registrar_atendimento(
+            ator_id=solicitante.pk,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=_payload_total(requisicao_pronta_retirada),
+            retirante_nome='X',
+        )
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_aceita_chefe_almox(
+    requisicao_pronta_retirada, chefe_almoxarifado
+):
+    req = registrar_atendimento(
+        ator_id=chefe_almoxarifado.pk,
+        requisicao_id=requisicao_pronta_retirada.pk,
+        itens=_payload_total(requisicao_pronta_retirada),
+        retirante_nome='X',
+    )
+    assert req.estado == EstadoRequisicao.ATENDIDA
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_aceita_superuser(requisicao_pronta_retirada, superuser):
+    req = registrar_atendimento(
+        ator_id=superuser.pk,
+        requisicao_id=requisicao_pronta_retirada.pk,
+        itens=_payload_total(requisicao_pronta_retirada),
+        retirante_nome='X',
+    )
+    assert req.estado == EstadoRequisicao.ATENDIDA
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_retirante_obrigatorio(
+    requisicao_pronta_retirada, aux_almoxarifado
+):
+    with pytest.raises(DadosInvalidos) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=_payload_total(requisicao_pronta_retirada),
+            retirante_nome='   ',
+        )
+    assert excinfo.value.code == 'retirante_obrigatorio'
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_payload_incompleto(
+    requisicao_pronta_retirada, aux_almoxarifado
+):
+    with pytest.raises(DadosInvalidos) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=[],
+            retirante_nome='X',
+        )
+    assert excinfo.value.code == 'itens_atendimento_incompletos'
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_idempotencia_bloqueia_segunda_execucao(
+    requisicao_pronta_retirada, aux_almoxarifado
+):
+    registrar_atendimento(
+        ator_id=aux_almoxarifado.pk,
+        requisicao_id=requisicao_pronta_retirada.pk,
+        itens=_payload_total(requisicao_pronta_retirada),
+        retirante_nome='X',
+    )
+    with pytest.raises(EstadoInvalido):
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=_payload_total(requisicao_pronta_retirada),
+            retirante_nome='X',
+        )
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_ator_inexistente(requisicao_pronta_retirada):
+    with pytest.raises(DadosInvalidos) as excinfo:
+        registrar_atendimento(
+            ator_id=999_999,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=_payload_total(requisicao_pronta_retirada),
+            retirante_nome='X',
+        )
+    assert excinfo.value.code == 'ator_nao_encontrado'
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_item_zero_sem_justificativa_falha_no_parcial_multi_item(
+    requisicao_pronta_retirada_multi, aux_almoxarifado
+):
+    itens = list(requisicao_pronta_retirada_multi.itens.order_by('id'))
+    primeiro, segundo = itens[0], itens[1]
+    with pytest.raises(DadosInvalidos) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_pronta_retirada_multi.pk,
+            itens=[
+                {
+                    'item_id': primeiro.id,
+                    'quantidade_entregue': primeiro.quantidade_autorizada,
+                    'justificativa': '',
+                },
+                {
+                    'item_id': segundo.id,
+                    'quantidade_entregue': Decimal('0'),
+                    'justificativa': '',
+                },
+            ],
+            retirante_nome='Carlos',
+        )
+    assert excinfo.value.code == 'justificativa_obrigatoria'
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_rejeita_nan_em_quantidade_entregue(
+    requisicao_pronta_retirada, aux_almoxarifado
+):
+    item = requisicao_pronta_retirada.itens.first()
+    with pytest.raises(DadosInvalidos) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=[
+                {
+                    'item_id': item.id,
+                    'quantidade_entregue': Decimal('NaN'),
+                    'justificativa': '',
+                }
+            ],
+            retirante_nome='X',
+        )
+    assert excinfo.value.code == 'quantidade_entregue_invalida'
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_total_zera_justificativa_existente(
+    requisicao_pronta_retirada, aux_almoxarifado
+):
+    """Atendimento total sobrescreve justificativa eventual com string vazia."""
+    item = requisicao_pronta_retirada.itens.first()
+    item.justificativa_entrega = 'antiga'
+    item.save(update_fields=['justificativa_entrega'])
+
+    registrar_atendimento(
+        ator_id=aux_almoxarifado.pk,
+        requisicao_id=requisicao_pronta_retirada.pk,
+        itens=[
+            {
+                'item_id': item.id,
+                'quantidade_entregue': item.quantidade_autorizada,
+                'justificativa': 'ignorada por ser total',
+            }
+        ],
+        retirante_nome='Carlos',
+    )
+
+    item.refresh_from_db()
+    assert item.justificativa_entrega == ''
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_bloqueia_material_inativo(
+    requisicao_pronta_retirada, aux_almoxarifado, material_disponivel
+):
+    """Material desativado entre autorização e atendimento bloqueia retirada."""
+    material_disponivel.ativo = False
+    material_disponivel.save(update_fields=['ativo'])
+
+    with pytest.raises(ConflitoDominio) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=requisicao_pronta_retirada.pk,
+            itens=_payload_total(requisicao_pronta_retirada),
+            retirante_nome='Carlos',
+        )
+    assert excinfo.value.code == 'material_inativo'
+    requisicao_pronta_retirada.refresh_from_db()
+    assert requisicao_pronta_retirada.estado == EstadoRequisicao.PRONTA_PARA_RETIRADA
+
+
+@pytest.mark.django_db
+def test_registrar_atendimento_requisicao_inexistente(aux_almoxarifado):
+    with pytest.raises(DadosInvalidos) as excinfo:
+        registrar_atendimento(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=999_999,
+            itens=[],
+            retirante_nome='X',
+        )
+    assert excinfo.value.code == 'requisicao_nao_encontrada'
