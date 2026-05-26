@@ -9,7 +9,7 @@ from decimal import Decimal
 import pytest
 from django.urls import reverse
 
-from apps.requisicoes.models import EstadoRequisicao, Requisicao
+from apps.requisicoes.models import EstadoRequisicao, ItemRequisicao, Requisicao
 from apps.requisicoes.services import criar_requisicao
 
 
@@ -1291,14 +1291,21 @@ def test_recusar_requisicao_htmx_superuser_retorna_hx_redirect(
 
 
 @pytest.fixture
-def req_autorizada_view(db, solicitante, setor_obras):
-    return Requisicao.objects.create(
+def req_autorizada_view(db, solicitante, setor_obras, material_disponivel):
+    req = Requisicao.objects.create(
         estado=EstadoRequisicao.AUTORIZADA,
         numero_publico='REQ-2026-9001',
         criador=solicitante,
         beneficiario=solicitante,
         setor_beneficiario=setor_obras,
     )
+    ItemRequisicao.objects.create(
+        requisicao=req,
+        material=material_disponivel,
+        quantidade_solicitada=1,
+        quantidade_autorizada=1,
+    )
+    return req
 
 
 @pytest.fixture
@@ -1451,13 +1458,16 @@ def test_separar_retirada_estado_invalido_avisa(
     client, aux_almoxarifado, req_pronta_view
 ):
     _login(client, aux_almoxarifado)
-    response = client.post(
-        reverse('requisicoes:separar_retirada', kwargs={'pk': req_pronta_view.pk}),
-        follow=True,
-    )
+    url = reverse('requisicoes:separar_retirada', kwargs={'pk': req_pronta_view.pk})
+    # PRG: sem follow, deve retornar 302 para o detalhe
+    response = client.post(url)
+    assert response.status_code == 302
+    assert response.url == reverse('requisicoes:detalhe', args=[req_pronta_view.pk])
+    # Follow e verificar mensagem de warning com texto do EstadoInvalido
+    response = client.post(url, follow=True)
     assert response.status_code == 200
     messages_list = list(response.context['messages'])
-    assert any('warning' in m.tags for m in messages_list)
+    assert any('warning' in m.tags and 'autorizada' in m.message for m in messages_list)
 
 
 @pytest.mark.django_db

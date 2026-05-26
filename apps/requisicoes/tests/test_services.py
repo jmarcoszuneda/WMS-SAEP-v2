@@ -1047,6 +1047,24 @@ def test_separar_para_retirada_estado_invalido(requisicao_aguardando, aux_almoxa
 
 
 @pytest.mark.django_db
+def test_separar_para_retirada_sem_itens_autorizados(
+    aux_almoxarifado, solicitante, setor_obras
+):
+    req = Requisicao.objects.create(
+        estado=EstadoRequisicao.AUTORIZADA,
+        numero_publico='REQ-2026-TST-001',
+        criador=solicitante,
+        beneficiario=solicitante,
+        setor_beneficiario=setor_obras,
+    )
+    with pytest.raises(EstadoInvalido):
+        separar_para_retirada(
+            ator_id=aux_almoxarifado.pk,
+            requisicao_id=req.pk,
+        )
+
+
+@pytest.mark.django_db
 def test_separar_para_retirada_ator_inexistente(requisicao_autorizada):
     with pytest.raises(DadosInvalidos) as excinfo:
         separar_para_retirada(
