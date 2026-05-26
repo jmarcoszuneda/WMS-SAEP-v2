@@ -1760,6 +1760,36 @@ def test_atender_post_form_invalido_renderiza_400(
 
 
 @pytest.mark.django_db
+def test_atender_post_htmx_retorna_hx_redirect(
+    client, aux_almoxarifado, req_pronta_view_com_itens
+):
+    _login(client, aux_almoxarifado)
+    item = req_pronta_view_com_itens.itens.first()
+    response = client.post(
+        reverse(
+            'requisicoes:registrar_atendimento',
+            kwargs={'pk': req_pronta_view_com_itens.pk},
+        ),
+        data={
+            'itens-TOTAL_FORMS': '1',
+            'itens-INITIAL_FORMS': '1',
+            'itens-MIN_NUM_FORMS': '0',
+            'itens-MAX_NUM_FORMS': '1000',
+            'itens-0-item_id': str(item.id),
+            'itens-0-quantidade_entregue': '2',
+            'itens-0-justificativa': '',
+            'retirante_nome': 'Carlos',
+            'observacao': '',
+        },
+        HTTP_HX_REQUEST='true',
+    )
+    assert response.status_code == 204
+    assert response['HX-Redirect'] == reverse(
+        'requisicoes:detalhe', kwargs={'pk': req_pronta_view_com_itens.pk}
+    )
+
+
+@pytest.mark.django_db
 def test_detalhe_exibe_botao_registrar_retirada_para_aux_almox(
     client, aux_almoxarifado, req_pronta_view_com_itens
 ):
