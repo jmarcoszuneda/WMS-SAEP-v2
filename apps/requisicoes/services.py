@@ -456,7 +456,7 @@ def separar_para_retirada(
     ator_id: int,
     requisicao_id: int,
 ) -> Requisicao:
-    """Separa para retirada uma requisição já autorizada (TR-009).
+    """Separa para retirada uma requisição já autorizada (TR-015).
 
     AUTORIZADA -> PRONTA_PARA_RETIRADA. Mantém o saldo reservado da
     autorização e não toca em saldo físico.
