@@ -300,8 +300,7 @@ class BaseItemAtendimentoFormSet(BaseFormSet):
     def clean(self):
         if any(self.errors):
             return
-        if not self.item_ids_permitidos:
-            return
+        item_ids_permitidos = set(self.item_ids_permitidos or [])
         vistos: set[int] = set()
         for form in self.forms:
             if not form.cleaned_data:
@@ -309,7 +308,7 @@ class BaseItemAtendimentoFormSet(BaseFormSet):
             item_id = form.cleaned_data.get('item_id')
             if item_id is None:
                 continue
-            if item_id not in self.item_ids_permitidos:
+            if item_id not in item_ids_permitidos:
                 form.add_error('item_id', 'Item inválido para esta requisição.')
                 raise forms.ValidationError('Item inválido para esta requisição.')
             if item_id in vistos:
