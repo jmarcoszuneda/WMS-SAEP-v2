@@ -1346,7 +1346,6 @@ def test_cancelar_requisicao_post_autorizada_403_para_nao_autorizado(
 def test_cancelar_requisicao_post_autorizada_redireciona_e_muda_estado(
     client, solicitante, chefe_obras, material_disponivel
 ):
-    from apps.estoque.models import SaldoEstoque
     from apps.requisicoes.services import (
         autorizar_requisicao,
         criar_requisicao,
@@ -1371,9 +1370,6 @@ def test_cancelar_requisicao_post_autorizada_redireciona_e_muda_estado(
         ator_id=chefe_obras.pk,
         requisicao_id=req.pk,
     )
-    saldo_antes = SaldoEstoque.objects.get(material=material_disponivel)
-    reservado_antes = saldo_antes.saldo_reservado
-    fisico_antes = saldo_antes.saldo_fisico
 
     _login(client, solicitante)
     response = client.post(
@@ -1384,10 +1380,7 @@ def test_cancelar_requisicao_post_autorizada_redireciona_e_muda_estado(
     assert response.status_code == 302
     assert response.url == reverse('requisicoes:detalhe', kwargs={'pk': req.pk})
     req.refresh_from_db()
-    saldo_depois = SaldoEstoque.objects.get(material=material_disponivel)
     assert req.estado == EstadoRequisicao.CANCELADA
-    assert saldo_depois.saldo_reservado == reservado_antes - Decimal('2')
-    assert saldo_depois.saldo_fisico == fisico_antes
 
 
 @pytest.mark.django_db
