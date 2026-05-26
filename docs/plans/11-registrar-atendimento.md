@@ -94,10 +94,12 @@ class ItemAtendimentoEntrada(TypedDict):
 ### Policy
 `pode_atender_retirada(ator, requisicao) -> bool`:
 - ator ativo;
-- superusuário OR auxiliar/chefe do almoxarifado;
-- estado da requisição não importa (view aplica filtro adicional na flag UI).
+- requisição em `PRONTA_PARA_RETIRADA` (estado validado na própria policy, sem depender de filtro extra na view);
+- superusuário OR auxiliar/chefe do almoxarifado.
 
-Mesma forma que `pode_separar_para_retirada`. `exigir_pode_atender_retirada` delega.
+`exigir_pode_atender_retirada` delega para `pode_atender_retirada` e levanta `PermissaoNegada` quando falsa.
+
+A view e o service checam o estado antes de chamar a policy para preservar mensagens de domínio distintas (`EstadoInvalido` para estado errado; `PermissaoNegada/403` para papel sem direito).
 
 ## 4. Estratégia de testes
 
