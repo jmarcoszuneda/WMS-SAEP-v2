@@ -2,7 +2,7 @@
 
 import pytest
 
-from apps.requisicoes.forms import ItemRequisicaoFormSet
+from apps.requisicoes.forms import ItemAtendimentoFormSet, ItemRequisicaoFormSet
 
 
 def _build_formset_data(itens: list[dict], deletados: list[int] = None) -> dict:
@@ -124,3 +124,19 @@ def test_formset_linhas_validas_retorna_itens(
     itens = fs.linhas_validas()
     assert len(itens) == 2
     assert all('material_id' in i and 'quantidade_solicitada' in i for i in itens)
+
+
+@pytest.mark.django_db
+def test_formset_atendimento_rejeita_item_fora_da_lista_permitida():
+    data = {
+        'itens-TOTAL_FORMS': '1',
+        'itens-INITIAL_FORMS': '0',
+        'itens-MIN_NUM_FORMS': '0',
+        'itens-MAX_NUM_FORMS': '1000',
+        'itens-0-item_id': '999',
+        'itens-0-quantidade_entregue': '1',
+        'itens-0-justificativa': '',
+    }
+    fs = ItemAtendimentoFormSet(data, prefix='itens', item_ids_permitidos=[])
+    assert not fs.is_valid()
+    assert fs.forms[0].errors['item_id'] == ['Item inválido para esta requisição.']

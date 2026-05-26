@@ -1,5 +1,7 @@
 """Forms e formsets para criação e edição de rascunho de requisição."""
 
+from decimal import Decimal
+
 from django import forms
 from django.forms import BaseFormSet, formset_factory
 
@@ -207,4 +209,117 @@ ItemRequisicaoFormSet = formset_factory(
     formset=BaseItemRequisicaoFormSet,
     extra=0,
     can_delete=True,
+)
+
+
+# ---------------------------------------------------------------------------
+# Atendimento (TR-016/017/018)
+# ---------------------------------------------------------------------------
+
+
+class RegistrarAtendimentoCabecalhoForm(forms.Form):
+    """Cabeçalho do formulário de atendimento."""
+
+    retirante_nome = forms.CharField(
+        label='Retirante',
+        max_length=150,
+        widget=forms.TextInput(
+            attrs={
+                'class': (
+                    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm '
+                    'focus:border-blue-500 focus:ring-2 focus:ring-blue-500 '
+                    'focus:outline-none'
+                ),
+                'autocomplete': 'off',
+                'placeholder': 'Nome de quem está retirando',
+            }
+        ),
+    )
+    observacao = forms.CharField(
+        label='Observação',
+        required=False,
+        widget=forms.Textarea(
+            attrs={
+                'rows': 2,
+                'class': (
+                    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm '
+                    'focus:border-blue-500 focus:ring-2 focus:ring-blue-500 '
+                    'focus:outline-none'
+                ),
+                'placeholder': 'Opcional',
+            }
+        ),
+    )
+
+
+class ItemAtendimentoForm(forms.Form):
+    """Linha do formset de atendimento (uma por item autorizado)."""
+
+    item_id = forms.IntegerField(widget=forms.HiddenInput())
+    quantidade_entregue = forms.DecimalField(
+        label='Quantidade entregue',
+        min_value=Decimal('0'),
+        max_digits=12,
+        decimal_places=3,
+        widget=forms.NumberInput(
+            attrs={
+                'class': (
+                    'w-32 rounded-lg border border-slate-300 px-3 py-2 text-sm '
+                    'focus:border-blue-500 focus:ring-2 focus:ring-blue-500 '
+                    'focus:outline-none'
+                ),
+                'step': '0.001',
+                'min': '0',
+                'inputmode': 'decimal',
+            }
+        ),
+    )
+    justificativa = forms.CharField(
+        label='Justificativa',
+        required=False,
+        widget=forms.TextInput(
+            attrs={
+                'class': (
+                    'w-full rounded-lg border border-slate-300 px-3 py-2 text-sm '
+                    'focus:border-blue-500 focus:ring-2 focus:ring-blue-500 '
+                    'focus:outline-none'
+                ),
+                'placeholder': 'Motivo da entrega menor que autorizada',
+            }
+        ),
+    )
+
+
+class BaseItemAtendimentoFormSet(BaseFormSet):
+    """Valida pertencimento e unicidade de item_id contra conjunto permitido."""
+
+    def __init__(self, *args, item_ids_permitidos=None, **kwargs):
+        super().__init__(*args, **kwargs)
+        self.item_ids_permitidos = {int(i) for i in (item_ids_permitidos or [])}
+
+    def clean(self):
+        if any(self.errors):
+            return
+        item_ids_permitidos = set(self.item_ids_permitidos or [])
+        vistos: set[int] = set()
+        for form in self.forms:
+            if not form.cleaned_data:
+                continue
+            item_id = form.cleaned_data.get('item_id')
+            if item_id is None:
+                continue
+            if item_id not in item_ids_permitidos:
+                form.add_error('item_id', 'Item inválido para esta requisição.')
+                raise forms.ValidationError('Item inválido para esta requisição.')
+            if item_id in vistos:
+                form.add_error('item_id', 'Item duplicado no atendimento.')
+                raise forms.ValidationError('Item duplicado no atendimento.')
+            vistos.add(item_id)
+
+
+ItemAtendimentoFormSet = formset_factory(
+    ItemAtendimentoForm,
+    formset=BaseItemAtendimentoFormSet,
+    extra=0,
+    can_delete=False,
 )
