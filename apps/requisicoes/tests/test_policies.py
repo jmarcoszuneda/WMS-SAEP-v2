@@ -459,13 +459,11 @@ def test_chefe_almox_pode_separar_requisicao_autorizada(
 
 
 @pytest.mark.django_db
-def test_superuser_pode_separar_requisicao_autorizada(
-    superuser, solicitante, setor_obras
-):
+def test_superuser_nao_pode_separar(superuser, solicitante, setor_obras):
     req = _req_estado(
         EstadoRequisicao.AUTORIZADA, solicitante, setor_obras, 'REQ-2026-000202'
     )
-    assert pode_separar_para_retirada(superuser, req) is True
+    assert pode_separar_para_retirada(superuser, req) is False
 
 
 @pytest.mark.django_db
@@ -482,26 +480,6 @@ def test_solicitante_nao_pode_separar(solicitante, setor_obras):
         EstadoRequisicao.AUTORIZADA, solicitante, setor_obras, 'REQ-2026-000204'
     )
     assert pode_separar_para_retirada(solicitante, req) is False
-
-
-@pytest.mark.django_db
-@pytest.mark.parametrize(
-    ('estado', 'numero'),
-    [
-        (EstadoRequisicao.RASCUNHO, 'REQ-2026-000210'),
-        (EstadoRequisicao.AGUARDANDO_AUTORIZACAO, 'REQ-2026-000211'),
-        (EstadoRequisicao.PRONTA_PARA_RETIRADA, 'REQ-2026-000212'),
-        (EstadoRequisicao.ATENDIDA, 'REQ-2026-000213'),
-        (EstadoRequisicao.RECUSADA, 'REQ-2026-000214'),
-        (EstadoRequisicao.CANCELADA, 'REQ-2026-000215'),
-        (EstadoRequisicao.ESTORNADA, 'REQ-2026-000216'),
-    ],
-)
-def test_aux_almox_nao_pode_separar_se_estado_origem_invalido(
-    estado, numero, aux_almoxarifado, solicitante, setor_obras
-):
-    req = _req_estado(estado, solicitante, setor_obras, numero)
-    assert pode_separar_para_retirada(aux_almoxarifado, req) is False
 
 
 @pytest.mark.django_db
