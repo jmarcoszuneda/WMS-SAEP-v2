@@ -1,9 +1,11 @@
 # WMS-SAEP-v2 overview
-- Last verified: 2026-05-21.
+- Last verified: 2026-05-26 from `main` at merge PR #27 (`5cf299c`), aligned with `origin/main` and `upstream/main`.
 - Django 6 project for WMS-SAEP, single-context almoxarifado system: requisitions, authorization, fulfillment, stock control, notifications, and server-rendered UI.
-- Current stack: Python >=3.13, Django >=6.0,<6.1, django-environ, django-htmx, psycopg, pytest, pytest-django, Tailwind CSS v4 via npm scripts.
-- Database contract: PostgreSQL via `DATABASE_URL`; no silent SQLite fallback in `config/settings/base.py`. Test settings also use PostgreSQL through pytest-django.
-- Apps present: `apps.accounts` (Setor, User by matricula, VinculoAuxiliar), `apps.estoque` (Material, Estoque, SaldoEstoque), `apps.requisicoes` (SequenciaRequisicao, Requisicao, ItemRequisicao, TimelineRequisicao), `apps.notificacoes`, `apps.core` (shared UI, management commands, base templates).
+- Current stack: Python >=3.13, Django >=6.0,<6.1, django-environ, django-htmx, psycopg, pytest, pytest-django, django-stubs/mypy, Ruff, Tailwind CSS v4 via npm scripts.
+- Database contract: PostgreSQL via `DATABASE_URL`; no silent SQLite fallback in `config/settings/base.py`. Test settings use PostgreSQL through pytest-django.
+- Apps present: `apps.accounts` (Setor, User by matricula, VinculoAuxiliar), `apps.estoque` (Material, Estoque, SaldoEstoque), `apps.requisicoes` (SequenciaRequisicao, Requisicao, ItemRequisicao, TimelineRequisicao), `apps.notificacoes`, `apps.core` (shared UI, exceptions, management commands, base templates).
+- Basic operational app flow is implemented through merged PRs #19-#27: draft requisition, my requisitions/detail/timeline, submit draft, authorization queue, return/refuse/authorize, fulfillment queue, separate for pickup, register fulfillment, and cancel before final pickup.
+- Canonical requisition routes live in `apps/requisicoes/urls.py`: `/requisicoes/`, `/minhas/`, `/autorizacoes/`, `/atendimentos/`, `/nova/`, detail and action URLs for authorize/cancel/separate/fulfill/edit/send/return/refuse, plus HTMX item row and material search endpoints.
 - Canonical dev seed lives in `apps/core/management/commands/seed_dev.py` and follows ADR-0009: `SEED_DEV_HABILITADO=true`, `DEBUG=True`, canonical sectors/users/materials/stock/saldos/sequencia, default password `senha@dev`.
-- Project docs are authoritative when memory differs: root `AGENTS.md`, `CONTEXT.md`, `docs/CONVENTIONS.md`, `docs/adr/`, and `docs/agents/domain.md`.
+- Project docs are authoritative when memory differs: root `AGENTS.md`, `docs/CONVENTIONS.md`, `docs/adr/`, `docs/agents/domain.md`, `.design/`, `docs/estado-transicoes-requisicao.md`, `docs/matriz-permissoes.md`, and `docs/processos-almoxarifado.md`.
 - Project path: `/Users/jmzr/Dev/WMS-SAEP-v2` on Darwin/macOS.

@@ -1,6 +1,6 @@
 # Comandos sugeridos
-- Última verificação: 2026-05-21.
-- Prefixar comandos de shell com `rtk` conforme `/Users/jmzr/.codex/RTK.md`.
+- Última verificação: 2026-05-26.
+- Regra global RTK: prefixar comandos shell com `rtk` conforme `/Users/jmzr/.codex/RTK.md`, exceto quando o ambiente/tooling do agente exigir execução direta.
 - Inspecionar arquivos do repo: `rtk rg --files`
 - Status do Git: `rtk git status -sb`
 - Instalar/sincronizar dependências travadas: `rtk uv sync --frozen`
@@ -10,10 +10,11 @@
 - Checagem Django: `rtk uv run python manage.py check`
 - Checagem de migrations: `rtk uv run python manage.py makemigrations --check --dry-run`
 - Aplicar migrations localmente: `rtk uv run python manage.py migrate --run-syncdb`
-- Fluxo de setup/reset dev: `rtk make setup` (reset/compile/makemigrations/migrate/seed-dev conforme Makefile)
+- Fluxo de setup/reset dev: `rtk make setup` (clean/resetpostgres, collectstatic, makemigrations, migrate, seed-dev conforme Makefile)
 - Rodar apenas seed canônico dev: `rtk make seed-dev`
 - Formato manual do seed: `SEED_DEV_HABILITADO=true DEBUG=true rtk uv run python manage.py seed_dev`
 - Subir servidor dev: `rtk make run`
 - Compilar CSS: `rtk make css-build`; observar CSS em modo watch: `rtk make css-dev`
 - Checar whitespace: `rtk git diff --check`
-- Regra de comando de teste do AGENTS.md: nunca usar redirecionamentos, pipes, `tail`, `head`, `grep` ou truncamento de output em comandos de teste; se o comando falhar, inspecionar o path `[full output: ...]` do RTK em vez de rerodar só para output.
+- Regra de comando do AGENTS.md: nunca usar redirecionamentos, pipes, `tail`, `head`, `grep` ou truncamento de output. Quando comando falhar, inspecionar o path `[full output: ...]` emitido pelo RTK Tee System sem rerodar só para output.
+- Makefile ainda contém `egrep` no target `help`, mas isso é detalhe interno do Makefile; agentes devem evitar `grep` direto conforme AGENTS.md.

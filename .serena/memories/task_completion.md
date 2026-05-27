@@ -1,14 +1,15 @@
 # Checklist de conclusão de tarefa
-- Última verificação: 2026-05-21.
+- Última verificação: 2026-05-26.
 - Confirmar branch antes de commit. Nunca commitar diretamente em `main`; nomes de branch devem usar `feat/`, `fix/`, `docs/`, `refactor/`, `test/` ou `chore/` conforme AGENTS.md.
 - Antes de codar, usar Serena para navegação de projeto/código e Context7 para documentação atual de bibliotecas/frameworks externos quando relevante.
+- Para UI/frontend, ler `.design/INFORMATION_ARCHITECTURE.md`, `.design/TASKS.md` e o `DESIGN_BRIEF.md` da área antes de implementar/revisar. `.design/` não supera ADRs, `docs/design-system.md`, `docs/CONVENTIONS.md`, regras de domínio, testes ou código vivo.
 - Para mudanças em model/schema neste contexto dev efêmero, rodar `rtk make setup` antes da validação final; migrations locais são artefatos gerados, não artefatos normais de entrega.
-- Para mudanças de CI/tooling, manter `pyproject.toml`, `uv.lock`, `.github/workflows/ci.yml`, `docs/ci-pipeline.md` e memórias de comando do Serena alinhados.
+- Para mudanças de CI/tooling, manter `pyproject.toml`, `uv.lock`, `.github/workflows/ci.yml`, `docs/ci-pipeline.md` e memórias Serena alinhados.
 - Rodar regras de qualidade ao tocar CI/tooling: `rtk uv run ruff format --check .`, `rtk uv run ruff check .`, `rtk uv run mypy apps`.
-- Para mudanças sem schema, rodar testes focados primeiro e depois a suíte completa quando viável: `rtk uv run pytest -q -ra --tb=short --strict-markers --disable-warnings`.
+- Para mudanças sem schema, rodar testes focados primeiro e depois suíte completa quando viável: `rtk uv run pytest -q -ra --tb=short --strict-markers --disable-warnings`.
 - Rodar `rtk uv run python manage.py check` após mudanças Django.
 - Rodar `rtk git diff --check` antes de finalizar.
 - Para mudanças no pipeline CI com DB, verificar `makemigrations --check --dry-run`, `migrate --run-syncdb` e duas execuções consecutivas de `seed_dev` quando PostgreSQL local estiver disponível.
-- Se o contrato de seed/dados dev mudar, garantir alinhamento com ADR-0009 e `docs/CONVENTIONS.md#seed-bootstrap-exceptions`.
-- Manter docs e memória Serena alinhadas quando decisão arquitetural ou workflow durável mudar.
+- Se contrato de seed/dados dev mudar, garantir alinhamento com ADR-0009 e `docs/CONVENTIONS.md#seed-bootstrap-exceptions`.
+- Manter docs e memória Serena alinhadas quando decisão arquitetural, workflow durável, fluxo operacional ou contrato de domínio mudar.
 - Relatar comandos exatos de validação e resultado passa/falha na resposta final.
