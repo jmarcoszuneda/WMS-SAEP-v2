@@ -36,18 +36,17 @@
           this.devolverFoco();
         });
 
-        const body = dialog.querySelector('[data-modal-body]');
-        if (body) {
-          body.addEventListener('htmx:beforeSwap', (event) => {
-            if (event.detail.xhr.status === 422) {
-              event.detail.shouldSwap = true;
-              event.detail.isError = false;
-            }
-          });
-          body.addEventListener('htmx:afterSwap', () => {
+        dialog.addEventListener('htmx:beforeSwap', (event) => {
+          if (event.detail.xhr.status === 422) {
+            event.detail.shouldSwap = true;
+            event.detail.isError = false;
+          }
+        });
+        dialog.addEventListener('htmx:afterSwap', (event) => {
+          if (event.target.matches('[data-modal-body]')) {
             this.focarPrimeiroCampo();
-          });
-        }
+          }
+        });
       },
 
       abrir(event) {
