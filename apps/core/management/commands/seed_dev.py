@@ -44,7 +44,7 @@ USUARIOS = {
     },
     'ALMOX002': {
         'nome': 'Auxiliar Almoxarifado',
-        'setor': 'OBRAS',
+        'setor': 'ALMOX',
         'email': '',
         'is_staff': False,
         'is_superuser': False,
