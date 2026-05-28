@@ -8,6 +8,18 @@ _UMA_DECIMAL = ('kg', 'l', 'm')
 
 
 @register.filter
+def get_choice_label(field, value):
+    """Retorna o label de uma choice pelo value (para restaurar autocomplete)."""
+    if not value:
+        return ''
+    str_value = str(value)
+    for opt_value, opt_label in field.field.choices:
+        if str(opt_value) == str_value:
+            return opt_label
+    return ''
+
+
+@register.filter
 def formatar_quantidade(qtd, unidade: str) -> str:
     """Formata quantidade conforme a unidade de medida do material.
 

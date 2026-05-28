@@ -408,9 +408,7 @@ def test_buscar_beneficiarios_chefe_setor_retorna_usuarios_do_setor(
 
 
 @pytest.mark.django_db
-def test_buscar_beneficiarios_filtra_por_nome(
-    client, chefe_obras, outro_usuario_obras
-):
+def test_buscar_beneficiarios_filtra_por_nome(client, chefe_obras, outro_usuario_obras):
     _login(client, chefe_obras)
     resp = client.get(reverse('requisicoes:buscar_beneficiarios'), {'q': 'Maria'})
     assert resp.status_code == 200
