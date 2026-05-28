@@ -421,24 +421,25 @@
 
       async buscarTodos() {
         if (!this.query) {
-          await this.buscar('');
+          await this.buscar('', { limparSelecao: false });
         } else if (this.resultados.length > 0) {
           this.aberto = true;
         } else {
-          await this.buscar(this.query);
+          await this.buscar(this.query, { limparSelecao: false });
         }
       },
 
-      async buscar(q) {
+      async buscar(q, { limparSelecao = true } = {}) {
         this.query = q;
         if (this.query.length > 0 && this.query.length < 2) {
           // Qualquer edição invalida a seleção anterior até nova escolha explícita.
-          this.$refs.materialIdInput.value = '';
+          if (limparSelecao) this.$refs.materialIdInput.value = '';
+          this.resultados = [];
           this.fecharDropdown();
           return;
         }
-        // Limpa seleção anterior ao buscar nova query.
-        this.$refs.materialIdInput.value = '';
+        // Limpa seleção anterior ao buscar nova query (só quando usuário digita).
+        if (limparSelecao) this.$refs.materialIdInput.value = '';
         this.buscando = true;
         try {
           const res = await fetch(`{% url 'requisicoes:buscar_materiais' %}?q=${encodeURIComponent(this.query)}`, {
