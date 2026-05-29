@@ -61,17 +61,16 @@
             {% with current=request.resolver_match.view_name %}
               <section class="app-bar__menu-section" aria-label="Navegação">
                 <p class="app-bar__menu-heading">Navegação</p>
-                {% if current != 'core:home' %}
-                  <a
-                    href="{% url 'core:home' %}"
-                    class="app-bar__menu-item"
-                  >
-                    <svg class="app-bar__menu-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
-                      <path d="M12 3 2 11h3v8h6v-6h2v6h6v-8h3L12 3z"/>
-                    </svg>
-                    Início
-                  </a>
-                {% endif %}
+                <a
+                  href="{% url 'core:home' %}"
+                  class="app-bar__menu-item"
+                  {% if current == 'core:home' %}aria-current="page"{% endif %}
+                >
+                  <svg class="app-bar__menu-icon" xmlns="http://www.w3.org/2000/svg" width="20" height="20" viewBox="0 0 24 24" fill="currentColor" aria-hidden="true">
+                    <path d="M12 3 2 11h3v8h6v-6h2v6h6v-8h3L12 3z"/>
+                  </svg>
+                  Início
+                </a>
 
               </section>
 

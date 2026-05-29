@@ -488,7 +488,8 @@ def test_minhas_get_autenticado_200(client, solicitante, req_enviada_solicitante
     menu_html = html[
         html.index('aria-label="Navegação"') : html.index('app-bar__menu-divider')
     ]
-    assert reverse('requisicoes:minhas') not in menu_html
+    assert reverse('requisicoes:minhas') in menu_html
+    assert 'aria-current="page"' in menu_html
 
 
 @pytest.mark.django_db
