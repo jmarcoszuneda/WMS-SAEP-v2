@@ -27,6 +27,14 @@ class TestListarSaidasExcepcionaisView:
         response = client.get(URL)
         assert response.status_code == 403
 
+    def test_usuario_inativo_redirecionado_para_login(self, client, usuario_inativo):
+        # Django ModelBackend trata is_active=False como não-autenticado;
+        # @login_required redireciona para login (USR-01).
+        client.force_login(usuario_inativo)
+        response = client.get(URL)
+        assert response.status_code == 302
+        assert 'login' in response['Location']
+
     def test_anonimo_redirecionado_para_login(self, client):
         response = client.get(URL)
         assert response.status_code == 302
@@ -48,3 +56,9 @@ class TestListarSaidasExcepcionaisView:
         client.force_login(aux_almoxarifado)
         response = client.get(URL)
         assert response.context['pode_registrar'] is False
+
+    def test_pode_registrar_verdadeiro_para_superuser(self, client, superuser):
+        # Superuser tem override técnico para registrar (matriz-permissoes.md linha 78)
+        client.force_login(superuser)
+        response = client.get(URL)
+        assert response.context['pode_registrar'] is True

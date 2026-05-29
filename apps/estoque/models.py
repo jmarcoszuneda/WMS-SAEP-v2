@@ -187,6 +187,23 @@ class SaidaExcepcional(models.Model):
         verbose_name = 'saída excepcional'
         verbose_name_plural = 'saídas excepcionais'
         ordering = ('-criado_em',)
+        constraints = [
+            models.CheckConstraint(
+                name='saida_excepcional_estorno_consistente',
+                condition=(
+                    (
+                        models.Q(estado=EstadoSaidaExcepcional.REGISTRADA)
+                        & models.Q(estornado_em__isnull=True)
+                        & models.Q(estornado_por__isnull=True)
+                    )
+                    | (
+                        models.Q(estado=EstadoSaidaExcepcional.ESTORNADA)
+                        & models.Q(estornado_em__isnull=False)
+                        & models.Q(estornado_por__isnull=False)
+                    )
+                ),
+            ),
+        ]
 
     def __str__(self):
         return self.numero_publico or f'Saída #{self.pk}'

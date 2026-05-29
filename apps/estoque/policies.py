@@ -1,3 +1,5 @@
+from django.core.exceptions import ObjectDoesNotExist
+
 from apps.accounts.models import SetorClassificacao, User, VinculoAuxiliar
 from apps.core.exceptions import PermissaoNegada
 
@@ -10,7 +12,7 @@ def _eh_almoxarifado(usuario: User) -> bool:
             and setor_chefiado.ativo
         ):
             return True
-    except Exception:
+    except (AttributeError, ObjectDoesNotExist):
         pass
     return VinculoAuxiliar.objects.filter(
         usuario=usuario,
@@ -46,6 +48,6 @@ def pode_registrar_saida_excepcional(ator: User) -> bool:
             and setor_chefiado.ativo
         ):
             return True
-    except Exception:
+    except (AttributeError, ObjectDoesNotExist):
         pass
     return False
