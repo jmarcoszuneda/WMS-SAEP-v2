@@ -4,6 +4,8 @@
 
 Descrever os fluxos operacionais do módulo de Almoxarifado do WMS-SAEP, incluindo criação de requisição, autorização, atendimento, cancelamento, devolução, saídas excepcionais e estornos.
 
+> Saída excepcional tem especificação própria em `docs/processos-saida-excepcional.md`.
+
 ## 1.2 Fluxo principal de requisição
 
 O fluxo principal de uma requisição de material no Almoxarifado segue a lógica abaixo:
