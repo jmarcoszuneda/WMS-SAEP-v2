@@ -45,7 +45,6 @@ def buscar_detalhe_saida_excepcional(saida_id: int) -> SaidaExcepcional | None:
         return None
 
 
-
 @dataclass
 class LinhaPreviewSCPI:
     cadpro: str

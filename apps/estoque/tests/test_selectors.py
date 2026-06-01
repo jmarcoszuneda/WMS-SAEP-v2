@@ -132,8 +132,7 @@ class TestGerarPreviewImportacaoScpiCasos:
         from apps.estoque.selectors import gerar_preview_importacao_scpi
 
         csv_com_bom = (
-            '﻿CADPRO;QUANTIDADE\n'
-            f'{material_disponivel.codigo};100.000'
+            f'﻿CADPRO;QUANTIDADE\n{material_disponivel.codigo};100.000'
         ).encode('utf-8')
         linhas = gerar_preview_importacao_scpi(
             conteudo_bytes=csv_com_bom, estoque_id=estoque_principal.pk
