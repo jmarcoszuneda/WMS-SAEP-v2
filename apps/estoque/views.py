@@ -255,6 +255,8 @@ def preview_importacao_scpi_view(request):
         raise PermissionDenied(str(exc))
 
     if request.method == 'GET':
+        request.session.pop('scpi_preview_bytes', None)
+        request.session.pop('scpi_preview_nome', None)
         return render(request, 'estoque/preview_importacao_scpi.html', {})
 
     arquivo = request.FILES.get('arquivo')
@@ -286,6 +288,11 @@ def preview_importacao_scpi_view(request):
             {'erro_arquivo': str(exc)},
         )
 
+    import base64
+
+    request.session['scpi_preview_bytes'] = base64.b64encode(conteudo).decode('ascii')
+    request.session['scpi_preview_nome'] = arquivo.name
+
     total = len(linhas)
     divergencias = sum(1 for linha in linhas if linha.status == 'divergente')
     novos = sum(1 for linha in linhas if linha.status == 'novo')
@@ -299,6 +306,7 @@ def preview_importacao_scpi_view(request):
             'divergencias': divergencias,
             'novos': novos,
             'nome_arquivo': arquivo.name,
+            'pode_confirmar': True,
         },
     )
 
@@ -306,6 +314,10 @@ def preview_importacao_scpi_view(request):
 @login_required
 @require_http_methods(['POST'])
 def confirmar_importacao_scpi_view(request):
+    import base64
+
+    from django.urls import reverse
+
     from apps.core.exceptions import ConflitoDominio, DadosInvalidos, PermissaoNegada
     from apps.estoque.policies import exigir_pode_confirmar_importacao_scpi
     from apps.estoque.services import confirmar_importacao_scpi
@@ -315,12 +327,16 @@ def confirmar_importacao_scpi_view(request):
     except PermissaoNegada as exc:
         raise PermissionDenied(str(exc))
 
-    arquivo = request.FILES.get('arquivo')
-    if not arquivo:
+    conteudo_b64 = request.session.get('scpi_preview_bytes')
+    arquivo_nome = request.session.get('scpi_preview_nome', 'importacao.csv')
+
+    if not conteudo_b64:
         return render(
             request,
             'estoque/confirmar_importacao_scpi.html',
-            {'erro': 'O arquivo é obrigatório.'},
+            {
+                'erro': 'Nenhuma pré-visualização ativa. Faça o upload do arquivo novamente.'
+            },
         )
 
     estoque = Estoque.objects.filter(ativo=True).first()
@@ -332,11 +348,11 @@ def confirmar_importacao_scpi_view(request):
         )
 
     try:
-        conteudo = arquivo.read()
+        conteudo = base64.b64decode(conteudo_b64)
         importacao = confirmar_importacao_scpi(
             ator_id=request.user.id,
             conteudo_bytes=conteudo,
-            arquivo_nome=arquivo.name,
+            arquivo_nome=arquivo_nome,
             estoque_id=estoque.pk,
         )
     except ConflitoDominio as exc:
@@ -351,6 +367,35 @@ def confirmar_importacao_scpi_view(request):
             'estoque/confirmar_importacao_scpi.html',
             {'erro': str(exc)},
         )
+
+    request.session.pop('scpi_preview_bytes', None)
+    request.session.pop('scpi_preview_nome', None)
+
+    from django.http import HttpResponseRedirect
+
+    return HttpResponseRedirect(
+        reverse('estoque:sucesso_importacao_scpi', kwargs={'pk': importacao.pk})
+    )
+
+
+@login_required
+@require_http_methods(['GET'])
+def sucesso_importacao_scpi_view(request, pk: int):
+    from apps.core.exceptions import PermissaoNegada
+    from apps.estoque.models import ImportacaoSCPI
+    from apps.estoque.policies import exigir_pode_confirmar_importacao_scpi
+
+    try:
+        exigir_pode_confirmar_importacao_scpi(request.user)
+    except PermissaoNegada as exc:
+        raise PermissionDenied(str(exc))
+
+    try:
+        importacao = ImportacaoSCPI.objects.get(pk=pk)
+    except ImportacaoSCPI.DoesNotExist:
+        from django.http import Http404
+
+        raise Http404
 
     return render(
         request,

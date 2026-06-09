@@ -314,4 +314,4 @@ class ImportacaoSCPI(models.Model):
         ordering = ('-importado_em',)
 
     def __str__(self):
-        return f'ImportacaoSCPI #{self.pk} — {self.arquivo_nome}'
+        return f'Importação SCPI #{self.pk} — {self.arquivo_nome}'

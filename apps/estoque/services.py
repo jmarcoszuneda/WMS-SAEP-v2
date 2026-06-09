@@ -504,10 +504,10 @@ def confirmar_importacao_scpi(
     """Confirma importação SCPI: bloqueia reimportação, cria novos materiais e grava metadados."""
     import hashlib
 
-    from django.db import transaction
+    from django.db import IntegrityError, transaction
 
     from apps.accounts.models import User
-    from apps.core.exceptions import ConflitoDominio
+    from apps.core.exceptions import ConflitoDominio, DadosInvalidos
     from apps.estoque.models import (
         Estoque,
         ImportacaoSCPI,
@@ -519,17 +519,20 @@ def confirmar_importacao_scpi(
     from apps.estoque.policies import exigir_pode_confirmar_importacao_scpi
     from apps.estoque.selectors import gerar_preview_importacao_scpi
 
-    ator = User.objects.get(pk=ator_id)
+    try:
+        ator = User.objects.get(pk=ator_id)
+    except User.DoesNotExist:
+        raise DadosInvalidos('Usuário não encontrado.', code='usuario_nao_encontrado')
+
     exigir_pode_confirmar_importacao_scpi(ator)
 
-    arquivo_hash = hashlib.sha256(conteudo_bytes).hexdigest()
-    if ImportacaoSCPI.objects.filter(arquivo_hash=arquivo_hash).exists():
-        raise ConflitoDominio(
-            'Este arquivo já foi importado anteriormente. Reimportação bloqueada.',
-            code='reimportacao_bloqueada',
-        )
+    try:
+        estoque = Estoque.objects.get(pk=estoque_id)
+    except Estoque.DoesNotExist:
+        raise DadosInvalidos('Estoque não encontrado.', code='estoque_nao_encontrado')
 
-    estoque = Estoque.objects.get(pk=estoque_id)
+    arquivo_hash = hashlib.sha256(conteudo_bytes).hexdigest()
+
     linhas = gerar_preview_importacao_scpi(
         conteudo_bytes=conteudo_bytes,
         estoque_id=estoque_id,
@@ -544,6 +547,12 @@ def confirmar_importacao_scpi(
     )
 
     with transaction.atomic():
+        if ImportacaoSCPI.objects.filter(arquivo_hash=arquivo_hash).exists():
+            raise ConflitoDominio(
+                'Este arquivo já foi importado anteriormente. Reimportação bloqueada.',
+                code='reimportacao_bloqueada',
+            )
+
         for linha in linhas:
             if linha.status != 'novo':
                 continue
@@ -560,15 +569,21 @@ def confirmar_importacao_scpi(
                 saldo_reservado=0,
             )
 
-        importacao = ImportacaoSCPI.objects.create(
-            arquivo_nome=arquivo_nome,
-            arquivo_hash=arquivo_hash,
-            importado_por=ator,
-            estoque=estoque,
-            status=status,
-            total_linhas=len(linhas),
-            total_novos=total_novos,
-            total_divergentes=total_divergentes,
-        )
+        try:
+            importacao = ImportacaoSCPI.objects.create(
+                arquivo_nome=arquivo_nome,
+                arquivo_hash=arquivo_hash,
+                importado_por=ator,
+                estoque=estoque,
+                status=status,
+                total_linhas=len(linhas),
+                total_novos=total_novos,
+                total_divergentes=total_divergentes,
+            )
+        except IntegrityError:
+            raise ConflitoDominio(
+                'Este arquivo já foi importado anteriormente. Reimportação bloqueada.',
+                code='reimportacao_bloqueada',
+            )
 
     return importacao

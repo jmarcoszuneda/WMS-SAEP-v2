@@ -471,8 +471,9 @@ class TestPreviewImportacaoScpiView:
 
 
 class TestConfirmarImportacaoScpiView:
-    """Contrato HTTP de confirmar_importacao_scpi_view."""
+    """Contrato HTTP de confirmar_importacao_scpi_view (POST) + sucesso_importacao_scpi_view (GET)."""
 
+    URL_PREVIEW = '/estoque/importacao-scpi/pre-visualizacao/'
     URL = '/estoque/importacao-scpi/confirmar/'
 
     def _csv(self, cadpro: str = '000.888.001', quantidade: str = '10.000') -> bytes:
@@ -480,52 +481,69 @@ class TestConfirmarImportacaoScpiView:
             'utf-8'
         )
 
+    def _seed_session(self, client, superuser, csv_bytes: bytes) -> None:
+        from django.core.files.uploadedfile import SimpleUploadedFile
+
+        client.force_login(superuser)
+        arquivo = SimpleUploadedFile('seed.csv', csv_bytes, content_type='text/csv')
+        client.post(self.URL_PREVIEW, {'arquivo': arquivo})
+
     def test_nao_autenticado_redireciona_para_login(self, client):
         resp = client.post(self.URL, {})
         assert resp.status_code == 302
         assert '/login/' in resp['Location']
 
     def test_sem_permissao_retorna_403(self, client, chefe_almoxarifado):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
         client.force_login(chefe_almoxarifado)
-        arquivo = SimpleUploadedFile('t.csv', self._csv(), content_type='text/csv')
-        resp = client.post(self.URL, {'arquivo': arquivo})
+        resp = client.post(self.URL, {})
         assert resp.status_code == 403
 
-    def test_post_valido_redireciona_apos_confirmacao(
-        self, client, superuser, estoque_principal
-    ):
-        from django.core.files.uploadedfile import SimpleUploadedFile
-
-        client.force_login(superuser)
-        arquivo = SimpleUploadedFile('ok.csv', self._csv(), content_type='text/csv')
-        resp = client.post(self.URL, {'arquivo': arquivo})
-        assert resp.status_code in (200, 302)
-
-    def test_arquivo_ausente_retorna_200_com_erro(self, client, superuser):
+    def test_sem_session_retorna_200_com_erro(self, client, superuser):
         client.force_login(superuser)
         resp = client.post(self.URL, {})
         assert resp.status_code == 200
-        assert b'arquivo' in resp.content.lower() or b'obrigat' in resp.content.lower()
+        assert (
+            b'pr\xc3\xa9' in resp.content.lower()
+            or b'upload' in resp.content.lower()
+            or b'visualiza' in resp.content.lower()
+            or b'novamente' in resp.content.lower()
+        )
+
+    def test_post_com_session_valida_redireciona_para_sucesso(
+        self, client, superuser, estoque_principal
+    ):
+        csv_bytes = self._csv('000.888.010')
+        self._seed_session(client, superuser, csv_bytes)
+        resp = client.post(self.URL, {})
+        assert resp.status_code == 302
+        assert '/confirmada/' in resp['Location']
+
+    def test_get_sucesso_retorna_200_com_metadados(
+        self, client, superuser, estoque_principal
+    ):
+        csv_bytes = self._csv('000.888.011')
+        self._seed_session(client, superuser, csv_bytes)
+        redirect = client.post(self.URL, {})
+        assert redirect.status_code == 302
+        resp = client.get(redirect['Location'])
+        assert resp.status_code == 200
+        assert (
+            b'sucesso' in resp.content.lower() or b'confirmad' in resp.content.lower()
+        )
 
     def test_hash_duplicado_retorna_200_com_mensagem_erro(
         self, client, superuser, estoque_principal
     ):
-        from django.core.files.uploadedfile import SimpleUploadedFile
+        csv_bytes = self._csv('000.888.020')
+        self._seed_session(client, superuser, csv_bytes)
+        client.post(self.URL, {})
 
-        client.force_login(superuser)
-        csv_bytes = self._csv('000.888.002')
-        arquivo1 = SimpleUploadedFile('dup.csv', csv_bytes, content_type='text/csv')
-        client.post(self.URL, {'arquivo': arquivo1})
-
-        arquivo2 = SimpleUploadedFile('dup.csv', csv_bytes, content_type='text/csv')
-        resp = client.post(self.URL, {'arquivo': arquivo2})
+        self._seed_session(client, superuser, csv_bytes)
+        resp = client.post(self.URL, {})
         assert resp.status_code == 200
         assert (
             b'duplicad' in resp.content.lower()
             or b'reimporta' in resp.content.lower()
-            or b'conflito' in resp.content.lower()
             or b'j\xc3\xa1' in resp.content.lower()
         )
 
